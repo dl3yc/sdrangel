@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,9 +25,11 @@
 
 #include "SWGDeviceSettings.h"
 #include "SWGDeviceState.h"
+#include "SWGDeviceActions.h"
+#include "SWGTestSourceActions.h"
 
 #include "testsourceinput.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "testsourcethread.h"
 #include "dsp/dspcommands.h"
 #include "dsp/dspengine.h"
@@ -37,7 +40,7 @@ MESSAGE_CLASS_DEFINITION(TestSourceInput::MsgFileRecord, Message)
 MESSAGE_CLASS_DEFINITION(TestSourceInput::MsgStartStop, Message)
 
 
-TestSourceInput::TestSourceInput(DeviceSourceAPI *deviceAPI) :
+TestSourceInput::TestSourceInput(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
 	m_settings(),
 	m_testSourceThread(0),
@@ -46,7 +49,8 @@ TestSourceInput::TestSourceInput(DeviceSourceAPI *deviceAPI) :
 	m_masterTimer(deviceAPI->getMasterTimer())
 {
     m_fileSink = new FileRecord(QString("test_%1.sdriq").arg(m_deviceAPI->getDeviceUID()));
-    m_deviceAPI->addSink(m_fileSink);
+    m_deviceAPI->setNbSourceStreams(1);
+    m_deviceAPI->addAncillarySink(m_fileSink);
 
     if (!m_sampleFifo.setSize(96000 * 4)) {
         qCritical("TestSourceInput::TestSourceInput: Could not allocate SampleFifo");
@@ -65,7 +69,7 @@ TestSourceInput::~TestSourceInput()
         stop();
     }
 
-    m_deviceAPI->removeSink(m_fileSink);
+    m_deviceAPI->removeAncillarySink(m_fileSink);
     delete m_fileSink;
 }
 
@@ -213,14 +217,14 @@ bool TestSourceInput::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initAcquisition())
+            if (m_deviceAPI->initDeviceEngine())
             {
-                m_deviceAPI->startAcquisition();
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopAcquisition();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         if (m_settings.m_useReverseAPI) {
@@ -295,7 +299,9 @@ bool TestSourceInput::applySettings(const TestSourceSettings& settings, bool for
                 0, // no transverter mode
                 settings.m_log2Decim,
                 (DeviceSampleSource::fcPos_t) settings.m_fcPos,
-                settings.m_sampleRate);
+                settings.m_sampleRate,
+                DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD,
+                false);
 
         int frequencyShift = settings.m_frequencyShift;
         quint32 devSampleRate = settings.m_sampleRate;
@@ -305,7 +311,8 @@ bool TestSourceInput::applySettings(const TestSourceSettings& settings, bool for
             frequencyShift += DeviceSampleSource::calculateFrequencyShift(
                     settings.m_log2Decim,
                     (DeviceSampleSource::fcPos_t) settings.m_fcPos,
-                    settings.m_sampleRate);
+                    settings.m_sampleRate,
+                    DeviceSampleSource::FSHIFT_STD);
         }
 
         if (m_testSourceThread != 0)
@@ -492,7 +499,57 @@ int TestSourceInput::webapiSettingsPutPatch(
 {
     (void) errorMessage;
     TestSourceSettings settings = m_settings;
+    webapiUpdateDeviceSettings(settings, deviceSettingsKeys, response);
 
+    MsgConfigureTestSource *msg = MsgConfigureTestSource::create(settings, force);
+    m_inputMessageQueue.push(msg);
+
+    if (m_guiMessageQueue) // forward to GUI if any
+    {
+        MsgConfigureTestSource *msgToGUI = MsgConfigureTestSource::create(settings, force);
+        m_guiMessageQueue->push(msgToGUI);
+    }
+
+    webapiFormatDeviceSettings(response, settings);
+    return 200;
+}
+
+int TestSourceInput::webapiActionsPost(
+        const QStringList& deviceActionsKeys,
+        SWGSDRangel::SWGDeviceActions& query,
+        QString& errorMessage)
+{
+    SWGSDRangel::SWGTestSourceActions *swgTestSourceActions = query.getTestSourceActions();
+
+    if (swgTestSourceActions)
+    {
+        if (deviceActionsKeys.contains("record"))
+        {
+            bool record = swgTestSourceActions->getRecord() != 0;
+            MsgFileRecord *msg = MsgFileRecord::create(record);
+            getInputMessageQueue()->push(msg);
+
+            if (getMessageQueueToGUI())
+            {
+                MsgFileRecord *msgToGUI = MsgFileRecord::create(record);
+                getMessageQueueToGUI()->push(msgToGUI);
+            }
+        }
+
+        return 202;
+    }
+    else
+    {
+        errorMessage = "Missing TestSourceActions in query";
+        return 400;
+    }
+}
+
+void TestSourceInput::webapiUpdateDeviceSettings(
+    TestSourceSettings& settings,
+    const QStringList& deviceSettingsKeys,
+    SWGSDRangel::SWGDeviceSettings& response)
+{
     if (deviceSettingsKeys.contains("centerFrequency")) {
         settings.m_centerFrequency = response.getTestSourceSettings()->getCenterFrequency();
     }
@@ -564,18 +621,6 @@ int TestSourceInput::webapiSettingsPutPatch(
     if (deviceSettingsKeys.contains("reverseAPIDeviceIndex")) {
         settings.m_reverseAPIDeviceIndex = response.getTestSourceSettings()->getReverseApiDeviceIndex();
     }
-
-    MsgConfigureTestSource *msg = MsgConfigureTestSource::create(settings, force);
-    m_inputMessageQueue.push(msg);
-
-    if (m_guiMessageQueue) // forward to GUI if any
-    {
-        MsgConfigureTestSource *msgToGUI = MsgConfigureTestSource::create(settings, force);
-        m_guiMessageQueue->push(msgToGUI);
-    }
-
-    webapiFormatDeviceSettings(response, settings);
-    return 200;
 }
 
 void TestSourceInput::webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const TestSourceSettings& settings)
@@ -618,7 +663,8 @@ void TestSourceInput::webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings&
 void TestSourceInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const TestSourceSettings& settings, bool force)
 {
     SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
-    swgDeviceSettings->setTx(0);
+    swgDeviceSettings->setDirection(0); // single Rx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
     swgDeviceSettings->setDeviceHwType(new QString("TestSource"));
     swgDeviceSettings->setTestSourceSettings(new SWGSDRangel::SWGTestSourceSettings());
     SWGSDRangel::SWGTestSourceSettings *swgTestSourceSettings = swgDeviceSettings->getTestSourceSettings();
@@ -684,7 +730,7 @@ void TestSourceInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKe
     m_networkRequest.setUrl(QUrl(channelSettingsURL));
     m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QBuffer *buffer=new QBuffer();
+    QBuffer *buffer = new QBuffer();
     buffer->open((QBuffer::ReadWrite));
     buffer->write(swgDeviceSettings->asJson().toUtf8());
     buffer->seek(0);
@@ -692,24 +738,40 @@ void TestSourceInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKe
 //    qDebug("TestSourceInput::webapiReverseSendSettings: query:\n%s", swgDeviceSettings->asJson().toStdString().c_str());
 
     // Always use PATCH to avoid passing reverse API settings
-    m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    buffer->setParent(reply);
 
     delete swgDeviceSettings;
 }
 
 void TestSourceInput::webapiReverseSendStartStop(bool start)
 {
+    SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
+    swgDeviceSettings->setDirection(0); // single Rx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
+    swgDeviceSettings->setDeviceHwType(new QString("TestSource"));
+
     QString channelSettingsURL = QString("http://%1:%2/sdrangel/deviceset/%3/device/run")
             .arg(m_settings.m_reverseAPIAddress)
             .arg(m_settings.m_reverseAPIPort)
             .arg(m_settings.m_reverseAPIDeviceIndex);
     m_networkRequest.setUrl(QUrl(channelSettingsURL));
+    m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QBuffer *buffer = new QBuffer();
+    buffer->open((QBuffer::ReadWrite));
+    buffer->write(swgDeviceSettings->asJson().toUtf8());
+    buffer->seek(0);
+    QNetworkReply *reply;
 
     if (start) {
-        m_networkManager->sendCustomRequest(m_networkRequest, "POST");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "POST", buffer);
     } else {
-        m_networkManager->sendCustomRequest(m_networkRequest, "DELETE");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "DELETE", buffer);
     }
+
+    buffer->setParent(reply);
+    delete swgDeviceSettings;
 }
 
 void TestSourceInput::networkManagerFinished(QNetworkReply *reply)
@@ -722,10 +784,13 @@ void TestSourceInput::networkManagerFinished(QNetworkReply *reply)
                 << " error(" << (int) replyError
                 << "): " << replyError
                 << ": " << reply->errorString();
-        return;
+    }
+    else
+    {
+        QString answer = reply->readAll();
+        answer.chop(1); // remove last \n
+        qDebug("TestSourceInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
     }
 
-    QString answer = reply->readAll();
-    answer.chop(1); // remove last \n
-    qDebug("TestSourceInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    reply->deleteLater();
 }

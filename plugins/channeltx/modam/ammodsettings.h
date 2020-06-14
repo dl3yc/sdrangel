@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,6 +19,8 @@
 #define PLUGINS_CHANNELTX_MODAM_AMMODSETTINGS_H_
 
 #include <QByteArray>
+
+#include "dsp/cwkeyersettings.h"
 
 class Serializable;
 
@@ -42,7 +45,11 @@ struct AMModSettings
     quint32 m_rgbColor;
     QString m_title;
     AMModInputAF m_modAFInput;
-    QString m_audioDeviceName;
+    QString m_audioDeviceName;         //!< This is the audio device you get the audio samples from
+    QString m_feedbackAudioDeviceName; //!< This is the audio device you send the audio samples to for audio feedback
+    float m_feedbackVolumeFactor;
+    bool m_feedbackAudioEnable;
+    int m_streamIndex; //!< MIMO channel. Not relevant when connected to SO (single Tx).
     bool m_useReverseAPI;
     QString m_reverseAPIAddress;
     uint16_t m_reverseAPIPort;
@@ -52,12 +59,16 @@ struct AMModSettings
     Serializable *m_channelMarker;
     Serializable *m_cwKeyerGUI;
 
+    CWKeyerSettings m_cwKeyerSettings; //!< For standalone deserialize operation (without m_cwKeyerGUI)
+
     AMModSettings();
     void resetToDefaults();
     void setChannelMarker(Serializable *channelMarker) { m_channelMarker = channelMarker; }
     void setCWKeyerGUI(Serializable *cwKeyerGUI) { m_cwKeyerGUI = cwKeyerGUI; }
     QByteArray serialize() const;
     bool deserialize(const QByteArray& data);
+    const CWKeyerSettings& getCWKeyerSettings() const { return m_cwKeyerSettings; }
+    void setCWKeyerSettings(const CWKeyerSettings& cwKeyerSettings) { m_cwKeyerSettings = cwKeyerSettings; }
 };
 
 

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -54,6 +55,18 @@
 #   define SDRGUI_API
 #endif
 
+/* the 'SDRSRV_API' controls the import/export of 'sdrsrv' symbols
+ */
+#if !defined(sdrangel_STATIC)
+#  ifdef sdrsrv_EXPORTS
+#    define SDRSRV_API __SDR_EXPORT
+#  else
+#    define SDRSRV_API __SDR_IMPORT
+#  endif
+#else
+#   define SDRSRV_API
+#endif
+
 /* the 'DEVICES_API' controls the import/export of 'devices' symbols
  */
 #if !defined(sdrangel_STATIC)
@@ -100,18 +113,6 @@
 #  endif
 #else
 #  define QRTPLIB_API
-#endif
-
-/* the 'SERIALDV_API' controls the import/export of 'serialdv' symbols
- */
-#if !defined(sdrangel_STATIC)
-#  ifdef serialdv_EXPORTS
-#    define SERIALDV_API __SDR_EXPORT
-#  else
-#    define SERIALDV_API __SDR_IMPORT
-#  endif
-#else
-#  define SERIALDV_API
 #endif
 
 /* the 'SWG_API' controls the import/export of 'swagger' symbols

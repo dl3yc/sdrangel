@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,7 +19,6 @@
 
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
-#include <device/devicesourceapi.h>
 
 #ifdef SERVER_MODE
 #include "testsourceinput.h"
@@ -26,10 +26,12 @@
 #include "testsourcegui.h"
 #endif
 #include "testsourceplugin.h"
+#include "testsourcewebapiadapter.h"
 
 const PluginDescriptor TestSourcePlugin::m_pluginDescriptor = {
+    QString("TestSource"),
 	QString("Test Source input"),
-	QString("4.4.1"),
+	QString("4.12.3"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -54,30 +56,58 @@ void TestSourcePlugin::initPlugin(PluginAPI* pluginAPI)
 	pluginAPI->registerSampleSource(m_deviceTypeID, this);
 }
 
-PluginInterface::SamplingDevices TestSourcePlugin::enumSampleSources()
+void TestSourcePlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
+{
+    if (listedHwIds.contains(m_hardwareID)) { // check if it was done
+        return;
+    }
+
+    originDevices.append(OriginDevice(
+        "TestSource",
+        m_hardwareID,
+        QString(),
+        0,
+        1, // nb Rx
+        0  // nb Tx
+    ));
+
+    listedHwIds.append(m_hardwareID);
+}
+
+PluginInterface::SamplingDevices TestSourcePlugin::enumSampleSources(const OriginDevices& originDevices)
 {
 	SamplingDevices result;
 
-    result.append(SamplingDevice(
-            "TestSource",
-            m_hardwareID,
-            m_deviceTypeID,
-            QString::null,
-            0,
-            PluginInterface::SamplingDevice::BuiltInDevice,
-            true,
-            1,
-            0));
+	for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
+    {
+        if (it->hardwareId == m_hardwareID)
+        {
+            result.append(SamplingDevice(
+                it->displayableName,
+                m_hardwareID,
+                m_deviceTypeID,
+                it->serial,
+                it->sequence,
+                PluginInterface::SamplingDevice::BuiltInDevice,
+                PluginInterface::SamplingDevice::StreamSingleRx,
+                1,
+                0
+            ));
+        }
+    }
 
 	return result;
 }
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* TestSourcePlugin::createSampleSourcePluginInstanceGUI(
-        const QString& sourceId __attribute((unused)),
-        QWidget **widget __attribute((unused)),
-        DeviceUISet *deviceUISet __attribute((unused)))
+        const QString& sourceId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sourceId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -96,7 +126,7 @@ PluginInstanceGUI* TestSourcePlugin::createSampleSourcePluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSource *TestSourcePlugin::createSampleSourcePluginInstanceInput(const QString& sourceId, DeviceSourceAPI *deviceAPI)
+DeviceSampleSource *TestSourcePlugin::createSampleSourcePluginInstance(const QString& sourceId, DeviceAPI *deviceAPI)
 {
     if (sourceId == m_deviceTypeID)
     {
@@ -109,3 +139,7 @@ DeviceSampleSource *TestSourcePlugin::createSampleSourcePluginInstanceInput(cons
     }
 }
 
+DeviceWebAPIAdapter *TestSourcePlugin::createDeviceWebAPIAdapter() const
+{
+    return new TestSourceWebAPIAdapter();
+}

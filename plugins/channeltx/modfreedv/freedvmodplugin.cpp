@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,11 +22,13 @@
 #include "freedvmodgui.h"
 #endif
 #include "freedvmod.h"
+#include "freedvmodwebapiadapter.h"
 #include "freedvmodplugin.h"
 
 const PluginDescriptor FreeDVModPlugin::m_pluginDescriptor = {
+    FreeDVMod::m_channelId,
     QString("FreeDV Modulator"),
-    QString("4.5.0"),
+    QString("4.14.6"),
     QString("(c) Edouard Griffiths, F4EXB"),
     QString("https://github.com/f4exb/sdrangel"),
     true,
@@ -53,26 +56,29 @@ void FreeDVModPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* FreeDVModPlugin::createTxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSource *txChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSource *txChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* FreeDVModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel)
+PluginInstanceGUI* FreeDVModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const
 {
     return FreeDVModGUI::create(m_pluginAPI, deviceUISet, txChannel);
 }
 #endif
 
-BasebandSampleSource* FreeDVModPlugin::createTxChannelBS(DeviceSinkAPI *deviceAPI)
+BasebandSampleSource* FreeDVModPlugin::createTxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new FreeDVMod(deviceAPI);
 }
 
-ChannelSourceAPI* FreeDVModPlugin::createTxChannelCS(DeviceSinkAPI *deviceAPI)
+ChannelAPI* FreeDVModPlugin::createTxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new FreeDVMod(deviceAPI);
 }
 
-
+ChannelWebAPIAdapter* FreeDVModPlugin::createChannelWebAPIAdapter() const
+{
+	return new FreeDVModWebAPIAdapter();
+}

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -14,6 +15,9 @@
 // You should have received a copy of the GNU General Public License             //
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
+
+#ifndef INCLUDE_SDRBASE_DSP_PHASELOCK
+#define INCLUDE_SDRBASE_DSP_PHASELOCK
 
 #include <vector>
 #include "dsp/dsptypes.h"
@@ -179,3 +183,5 @@ protected:
         samples_out[3] = m_phase; // Pilot phase
     }
 };
+
+#endif // INCLUDE_SDRBASE_DSP_PHASELOCK

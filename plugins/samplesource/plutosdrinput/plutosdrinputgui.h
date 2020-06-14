@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -56,6 +57,7 @@ private:
     Ui::PlutoSDRInputGUI* ui;
     DeviceUISet* m_deviceUISet;
     PlutoSDRInputSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
     bool m_forceSettings;
     QTimer m_updateTimer;
     QTimer m_statusTimer;
@@ -68,6 +70,8 @@ private:
     MessageQueue m_inputMessageQueue;
 
     void displaySettings();
+    void displaySampleRate();
+    void displayFcTooltip();
     void sendSettings(bool forceSettings = false);
     void blockApplySettings(bool block);
     void updateSampleRateAndFrequency();
@@ -81,6 +85,9 @@ private slots:
     void on_centerFrequency_changed(quint64 value);
     void on_loPPM_valueChanged(int value);
     void on_dcOffset_toggled(bool checked);
+    void on_rfDCOffset_toggled(bool checked);
+    void on_bbDCOffset_toggled(bool checked);
+    void on_hwIQImbalance_toggled(bool checked);
     void on_iqImbalance_toggled(bool checked);
     void on_swDecim_currentIndexChanged(int index);
     void on_fcPos_currentIndexChanged(int index);
@@ -94,10 +101,12 @@ private slots:
     void on_gain_valueChanged(int value);
     void on_antenna_currentIndexChanged(int index);
     void on_transverter_clicked();
+    void on_sampleRateMode_toggled(bool checked);
     void updateHardware();
     void updateStatus();
     void handleInputMessages();
     void openDeviceSettingsDialog(const QPoint& p);
+    void openFileRecordDialog(const QPoint& p);
 };
 
 #endif /* PLUGINS_SAMPLESOURCE_PLUTOSDRINPUT_PLUTOSDRINPUTGUI_H_ */

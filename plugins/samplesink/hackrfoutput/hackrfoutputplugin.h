@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,7 +21,7 @@
 #include <QObject>
 #include "plugin/plugininterface.h"
 
-#define HACKRFOUTPUT_DEVICE_TYPE_ID "sdrangel.samplesource.hackrfoutput"
+#define HACKRFOUTPUT_DEVICE_TYPE_ID "sdrangel.samplesink.hackrf"
 
 class PluginAPI;
 
@@ -35,12 +36,14 @@ public:
 	const PluginDescriptor& getPluginDescriptor() const;
 	void initPlugin(PluginAPI* pluginAPI);
 
-	virtual SamplingDevices enumSampleSinks();
+	virtual void enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices);
+	virtual SamplingDevices enumSampleSinks(const OriginDevices& originDevices);
 	virtual PluginInstanceGUI* createSampleSinkPluginInstanceGUI(
 	        const QString& sinkId,
 	        QWidget **widget,
 	        DeviceUISet *deviceUISet);
-	virtual DeviceSampleSink* createSampleSinkPluginInstanceOutput(const QString& sinkId, DeviceSinkAPI *deviceAPI);
+	virtual DeviceSampleSink* createSampleSinkPluginInstance(const QString& sinkId, DeviceAPI *deviceAPI);
+    virtual DeviceWebAPIAdapter* createDeviceWebAPIAdapter() const;
 
 	static const QString m_hardwareID;
     static const QString m_deviceTypeID;

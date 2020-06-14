@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,12 +31,12 @@ struct ChannelAnalyzerSettings
         InputAutoCorr
     };
 
-    int m_frequency;
-    bool m_downSample;
-    quint32 m_downSampleRate;
+    int m_inputFrequencyOffset;
+    bool m_rationalDownSample;
+    quint32 m_rationalDownSamplerRate;
     int m_bandwidth;
     int m_lowCutoff;
-    int m_spanLog2;
+    int m_log2Decim;
     bool m_ssb;
     bool m_pll;
     bool m_fll;

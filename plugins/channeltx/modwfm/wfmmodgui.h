@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,8 +30,6 @@
 class PluginAPI;
 class DeviceUISet;
 class BasebandSampleSource;
-class ThreadedBasebandSampleSource;
-class UpChannelizer;
 
 namespace Ui {
     class WFMModGUI;
@@ -65,8 +64,6 @@ private:
     WFMModSettings m_settings;
     bool m_doApplySettings;
 
-//    ThreadedBasebandSampleSource* m_threadedChannelizer;
-//    UpChannelizer* m_channelizer;
     WFMMod* m_wfmMod;
     MovingAverageUtil<double, double, 20> m_channelPowerDbAvg;
 
@@ -84,6 +81,7 @@ private:
     void blockApplySettings(bool block);
     void applySettings(bool force = false);
     void displaySettings();
+    void displayStreamIndex();
     void updateWithStreamData();
     void updateWithStreamTime();
 

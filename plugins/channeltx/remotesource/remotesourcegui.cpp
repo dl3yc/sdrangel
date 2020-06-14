@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,9 +17,10 @@
 
 #include "remotesourcegui.h"
 
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "mainwindow.h"
 
 #include "remotesource.h"
@@ -80,13 +82,7 @@ bool RemoteSourceGUI::deserialize(const QByteArray& data)
 
 bool RemoteSourceGUI::handleMessage(const Message& message)
 {
-    if (RemoteSource::MsgSampleRateNotification::match(message))
-    {
-        RemoteSource::MsgSampleRateNotification& notif = (RemoteSource::MsgSampleRateNotification&) message;
-        m_channelMarker.setBandwidth(notif.getSampleRate());
-        return true;
-    }
-    else if (RemoteSource::MsgConfigureRemoteSource::match(message))
+    if (RemoteSource::MsgConfigureRemoteSource::match(message))
     {
         const RemoteSource::MsgConfigureRemoteSource& cfg = (RemoteSource::MsgConfigureRemoteSource&) message;
         m_settings = cfg.getSettings();
@@ -98,7 +94,16 @@ bool RemoteSourceGUI::handleMessage(const Message& message)
     else if (RemoteSource::MsgReportStreamData::match(message))
     {
         const RemoteSource::MsgReportStreamData& report = (RemoteSource::MsgReportStreamData&) message;
-        ui->sampleRate->setText(QString("%1").arg(report.get_sampleRate()));
+
+        uint32_t remoteSampleRate = report.get_sampleRate();
+
+        if (remoteSampleRate != m_remoteSampleRate)
+        {
+            m_channelMarker.setBandwidth(remoteSampleRate);
+            m_remoteSampleRate = remoteSampleRate;
+        }
+
+        ui->sampleRate->setText(QString("%1").arg(remoteSampleRate));
         QString nominalNbBlocksText = QString("%1/%2")
                 .arg(report.get_nbOriginalBlocks() + report.get_nbFECBlocks())
                 .arg(report.get_nbFECBlocks());
@@ -159,6 +164,7 @@ RemoteSourceGUI::RemoteSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet,
         ui(new Ui::RemoteSourceGUI),
         m_pluginAPI(pluginAPI),
         m_deviceUISet(deviceUISet),
+        m_remoteSampleRate(48000),
         m_countUnrecoverable(0),
         m_countRecovered(0),
         m_lastCountUnrecoverable(0),
@@ -177,12 +183,13 @@ RemoteSourceGUI::RemoteSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet,
     m_remoteSrc = (RemoteSource*) channelTx;
     m_remoteSrc->setMessageQueueToGUI(getInputMessageQueue());
 
-    connect(&(m_deviceUISet->m_deviceSinkAPI->getMasterTimer()), SIGNAL(timeout()), this, SLOT(tick()));
+    connect(&(m_deviceUISet->m_deviceAPI->getMasterTimer()), SIGNAL(timeout()), this, SLOT(tick()));
 
     m_channelMarker.blockSignals(true);
     m_channelMarker.setColor(m_settings.m_rgbColor);
     m_channelMarker.setCenterFrequency(0);
     m_channelMarker.setTitle("Remote source");
+    m_channelMarker.setSourceOrSinkStream(false);
     m_channelMarker.blockSignals(false);
     m_channelMarker.setVisible(true); // activate signal on the last setting only
 
@@ -229,17 +236,27 @@ void RemoteSourceGUI::displaySettings()
     m_channelMarker.blockSignals(true);
     m_channelMarker.setCenterFrequency(0);
     m_channelMarker.setTitle(m_settings.m_title);
-    m_channelMarker.setBandwidth(5000); // TODO
+    m_channelMarker.setBandwidth(m_remoteSampleRate);
     m_channelMarker.blockSignals(false);
     m_channelMarker.setColor(m_settings.m_rgbColor); // activate signal on the last setting only
 
     setTitleColor(m_settings.m_rgbColor);
     setWindowTitle(m_channelMarker.getTitle());
+    displayStreamIndex();
 
     blockApplySettings(true);
     ui->dataAddress->setText(m_settings.m_dataAddress);
     ui->dataPort->setText(tr("%1").arg(m_settings.m_dataPort));
     blockApplySettings(false);
+}
+
+void RemoteSourceGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void RemoteSourceGUI::leaveEvent(QEvent*)
@@ -273,28 +290,47 @@ void RemoteSourceGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void RemoteSourceGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_remoteSrc->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 void RemoteSourceGUI::on_dataAddress_returnPressed()

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,7 +19,7 @@
 #include "audioselectdialog.h"
 #include "ui_audioselectdialog.h"
 
-AudioSelectDialog::AudioSelectDialog(AudioDeviceManager* audioDeviceManager, const QString& deviceName, bool input, QWidget* parent) :
+AudioSelectDialog::AudioSelectDialog(const AudioDeviceManager* audioDeviceManager, const QString& deviceName, bool input, QWidget* parent) :
     QDialog(parent),
     m_selected(false),
     ui(new Ui::AudioSelectDialog),

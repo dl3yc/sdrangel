@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,21 +21,18 @@
 #include <QMainWindow>
 #include <QMediaMetaData>
 
-#include "datvdemodgui.h"
-#include "datvideostream.h"
-
-#include "device/devicesourceapi.h"
 #include "device/deviceuiset.h"
-#include "device/devicesourceapi.h"
-#include "dsp/downchannelizer.h"
-
-#include "dsp/threadedbasebandsamplesink.h"
-#include "ui_datvdemodgui.h"
+#include "dsp/dspengine.h"
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
 #include "util/db.h"
-#include "dsp/dspengine.h"
+#include "ui_datvdemodgui.h"
+#include "gui/crightclickenabler.h"
+#include "gui/audioselectdialog.h"
 #include "mainwindow.h"
+
+#include "datvdemodreport.h"
+#include "datvdemodgui.h"
 
 const QString DATVDemodGUI::m_strChannelID = "sdrangel.channel.demoddatv";
 
@@ -74,142 +72,22 @@ void DATVDemodGUI::setCenterFrequency(qint64 intCenterFrequency)
 
 void DATVDemodGUI::resetToDefaults()
 {
-    blockApplySettings(true);
-
-    ui->chkAllowDrift->setChecked(false);
-    ui->chkFastlock->setChecked(true);
-    ui->chkHardMetric->setChecked(false);
-    ui->chkViterbi->setChecked(false);
-
-    ui->cmbFEC->setCurrentIndex(0);
-    ui->cmbModulation->setCurrentIndex(0);
-    ui->cmbStandard->setCurrentIndex(0);
-    ui->cmbFilter->setCurrentIndex(0);
-    displayRRCParameters(false);
-
-    ui->spiNotchFilters->setValue(0);
-    ui->prgSynchro->setValue(0);
-
-    ui->lblStatus->setText("");
-
-    ui->rfBandwidth->setValue(512000);
-    ui->spiSymbolRate->setValue(250000);
-    ui->spiRollOff->setValue(35);
-    ui->spiExcursion->setValue(10);
-
-
-    blockApplySettings(false);
-
-    applySettings();
+    m_settings.resetToDefaults();
+    displaySettings();
+	applySettings(true);
 }
 
 QByteArray DATVDemodGUI::serialize() const
 {
-    SimpleSerializer s(1);
-
-    s.writeS32(1, m_objChannelMarker.getCenterFrequency());
-    s.writeU32(2, m_objChannelMarker.getColor().rgb());
-
-    s.writeBool(3, ui->chkAllowDrift->isChecked());
-    s.writeBool(4, ui->chkFastlock->isChecked());
-    s.writeS32(5, ui->cmbFilter->currentIndex());
-    s.writeBool(6, ui->chkHardMetric->isChecked());
-    s.writeS32(7, ui->spiRollOff->value());
-    s.writeBool(8, ui->chkViterbi->isChecked());
-
-    s.writeS32(9, ui->cmbFEC->currentIndex());
-    s.writeS32(10, ui->cmbModulation->currentIndex());
-    s.writeS32(11, ui->cmbStandard->currentIndex());
-
-    s.writeS32(12, ui->spiNotchFilters->value());
-    s.writeS64(13, ui->rfBandwidth->getValue());
-    s.writeS32(14, ui->spiSymbolRate->value());
-    s.writeS32(15, ui->spiExcursion->value());
-
-    return s.final();
+    return m_settings.serialize();
 }
 
 bool DATVDemodGUI::deserialize(const QByteArray& arrData)
 {
-    SimpleDeserializer d(arrData);
-
-    if (!d.isValid())
+    if (m_settings.deserialize(arrData))
     {
-        resetToDefaults();
-        return false;
-    }
-
-    if (d.getVersion() == 1)
-    {
-        QByteArray bytetmp;
-        uint32_t u32tmp;
-        qint64 i64tmp;
-        int tmp;
-        bool booltmp;
-
-        blockApplySettings(true);
-        m_objChannelMarker.blockSignals(true);
-
-        d.readS32(1, &tmp, 0);
-        m_objChannelMarker.setCenterFrequency(tmp);
-        ui->deltaFrequency->setValue(tmp);
-
-        if (d.readU32(2, &u32tmp))
-        {
-            m_objChannelMarker.setColor(u32tmp);
-        }
-        else
-        {
-            m_objChannelMarker.setColor(Qt::magenta);
-        }
-
-        d.readBool(3, &booltmp, false);
-        ui->chkAllowDrift->setChecked(booltmp);
-
-        d.readBool(4, &booltmp, false);
-        ui->chkFastlock->setChecked(booltmp);
-
-        d.readS32(5, &tmp, false);
-        ui->cmbFilter->setCurrentIndex(tmp);
-
-        displayRRCParameters((tmp==2));
-
-        d.readBool(6, &booltmp, false);
-        ui->chkHardMetric->setChecked(booltmp);
-
-        d.readS32(7, &tmp, false);
-        ui->spiRollOff->setValue(tmp);
-
-        d.readBool(8, &booltmp, false);
-        ui->chkViterbi->setChecked(booltmp);
-
-
-        d.readS32(9, &tmp, 0);
-        ui->cmbFEC->setCurrentIndex(tmp);
-
-        d.readS32(10, &tmp, 0);
-        ui->cmbModulation->setCurrentIndex(tmp);
-
-        d.readS32(11, &tmp, 0);
-        ui->cmbStandard->setCurrentIndex(tmp);
-
-        d.readS32(12, &tmp, 0);
-        ui->spiNotchFilters->setValue(tmp);
-
-        d.readS64(13, &i64tmp, 5120000);
-        ui->rfBandwidth->setValue(i64tmp);
-
-        d.readS32(14, &tmp, 250000);
-        ui->spiSymbolRate->setValue(tmp);
-
-        d.readS32(15, &tmp, false);
-        ui->spiExcursion->setValue(tmp);
-
-
-        blockApplySettings(false);
-        m_objChannelMarker.blockSignals(false);
-
-        applySettings();
+        displaySettings();
+        applySettings(true);
         return true;
     }
     else
@@ -219,10 +97,34 @@ bool DATVDemodGUI::deserialize(const QByteArray& arrData)
     }
 }
 
-bool DATVDemodGUI::handleMessage(const Message& objMessage)
+bool DATVDemodGUI::handleMessage(const Message& message)
 {
-    (void) objMessage;
-    return false;
+    if (DATVDemodReport::MsgReportModcodCstlnChange::match(message))
+    {
+        DATVDemodReport::MsgReportModcodCstlnChange& notif = (DATVDemodReport::MsgReportModcodCstlnChange&) message;
+        m_settings.m_fec = notif.getCodeRate();
+        m_settings.m_modulation = notif.getModulation();
+        m_settings.validateSystemConfiguration();
+        displaySystemConfiguration();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+void DATVDemodGUI::handleInputMessages()
+{
+    Message* message;
+
+    while ((message = getInputMessageQueue()->pop()) != 0)
+    {
+        if (handleMessage(*message))
+        {
+            delete message;
+        }
+    }
 }
 
 void DATVDemodGUI::channelMarkerChangedByCursor()
@@ -252,7 +154,6 @@ void DATVDemodGUI::onMenuDoubleClicked()
 {
 }
 
-//DATVDemodGUI::DATVDemodGUI(PluginAPI* objPluginAPI, DeviceSourceAPI *objDeviceAPI, QWidget* objParent) :
 DATVDemodGUI::DATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel, QWidget* objParent) :
         RollupWidget(objParent),
         ui(new Ui::DATVDemodGUI),
@@ -260,30 +161,34 @@ DATVDemodGUI::DATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, Ba
         m_deviceUISet(deviceUISet),
         m_objChannelMarker(this),
         m_blnBasicSettingsShown(false),
-        m_blnDoApplySettings(true)
+        m_blnDoApplySettings(true),
+        m_modcodModulationIndex(-1),
+        m_modcodCodeRateIndex(-1),
+        m_cstlnSetByModcod(false)
 {
     ui->setupUi(this);
     ui->screenTV->setColor(true);
     setAttribute(Qt::WA_DeleteOnClose, true);
     connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
+    connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()));
 
     m_objDATVDemod = (DATVDemod*) rxChannel;
     m_objDATVDemod->setMessageQueueToGUI(getInputMessageQueue());
 
     m_objDATVDemod->SetTVScreen(ui->screenTV);
 
-    connect(m_objDATVDemod->SetVideoRender(ui->screenTV_2),&DATVideostream::onDataPackets,this,&DATVDemodGUI::on_StreamDataAvailable);
-
-    connect(ui->screenTV_2,&DATVideoRender::onMetaDataChanged,this,&DATVDemodGUI::on_StreamMetaDataChanged);
+    connect(m_objDATVDemod->SetVideoRender(ui->screenTV_2), &DATVideostream::onDataPackets, this, &DATVDemodGUI::on_StreamDataAvailable);
+    connect(ui->screenTV_2, &DATVideoRender::onMetaDataChanged, this, &DATVDemodGUI::on_StreamMetaDataChanged);
 
     m_intPreviousDecodedData=0;
     m_intLastDecodedData=0;
     m_intLastSpeed=0;
     m_intReadyDecodedData=0;
-    m_blnButtonPlayClicked=false;
     m_objTimer.setInterval(1000);
     connect(&m_objTimer, SIGNAL(timeout()), this, SLOT(tick()));
     m_objTimer.start();
+
+    ui->fullScreen->setVisible(false);
 
     ui->deltaFrequencyLabel->setText(QString("%1f").arg(QChar(0x94, 0x03)));
     ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
@@ -306,19 +211,23 @@ DATVDemodGUI::DATVDemodGUI(PluginAPI* objPluginAPI, DeviceUISet *deviceUISet, Ba
     m_deviceUISet->addChannelMarker(&m_objChannelMarker);
     m_deviceUISet->addRollupWidget(this);
 
-    ui->pushButton_3->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    // QPixmap pixmapTarget = QPixmap(":/film.png");
+    // pixmapTarget = pixmapTarget.scaled(16, 16, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    // ui->videoPlay->setAlignment(Qt::AlignCenter);
+    // ui->videoPlay->setPixmap(pixmapTarget);
+
+	CRightClickEnabler *audioMuteRightClickEnabler = new CRightClickEnabler(ui->audioMute);
+	connect(audioMuteRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(audioSelect()));
+
 
     resetToDefaults(); // does applySettings()
-
 }
 
 DATVDemodGUI::~DATVDemodGUI()
 {
-
     m_deviceUISet->removeRxChannelInstance(this);
     delete m_objDATVDemod;
     delete ui;
-
 }
 
 void DATVDemodGUI::blockApplySettings(bool blnBlock)
@@ -326,169 +235,127 @@ void DATVDemodGUI::blockApplySettings(bool blnBlock)
     m_blnDoApplySettings = !blnBlock;
 }
 
-void DATVDemodGUI::applySettings()
+void DATVDemodGUI::displaySettings()
 {
-    QString strStandard;
-    QString strModulation;
-    QString strFEC;
+    m_objChannelMarker.blockSignals(true);
+    blockApplySettings(true);
 
-    DATVModulation enmSelectedModulation;
-    dvb_version enmVersion;
-    leansdr::code_rate enmFEC;
-    dvb_sampler enmSampler;
+    m_objChannelMarker.setCenterFrequency(m_settings.m_centerFrequency);
+    m_objChannelMarker.setBandwidth(m_settings.m_rfBandwidth);
+    ui->deltaFrequency->setValue(m_settings.m_centerFrequency);
+    m_objChannelMarker.setColor(m_settings.m_rgbColor);
 
+    ui->chkAllowDrift->setChecked(m_settings.m_allowDrift);
+    ui->chkHardMetric->setChecked(m_settings.m_hardMetric);
+    ui->chkFastlock->setChecked(m_settings.m_fastLock);
+    ui->chkViterbi->setChecked(m_settings.m_viterbi);
+
+    if (m_settings.m_standard == DATVDemodSettings::dvb_version::DVB_S)
+    {
+        ui->chkAllowDrift->setEnabled(true);
+        ui->chkHardMetric->setEnabled(true);
+        ui->chkFastlock->setEnabled(true);
+        ui->chkViterbi->setEnabled(true);
+        ui->chkAllowDrift->setStyleSheet("QCheckBox { color: white }");
+        ui->chkHardMetric->setStyleSheet("QCheckBox { color: white }");
+        ui->chkFastlock->setStyleSheet("QCheckBox { color: white }");
+        ui->chkViterbi->setStyleSheet("QCheckBox { color: white }");
+    }
+    else
+    {
+        ui->chkAllowDrift->setEnabled(false);
+        ui->chkHardMetric->setEnabled(false);
+        ui->chkFastlock->setEnabled(false);
+        ui->chkViterbi->setEnabled(false);
+        ui->chkAllowDrift->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkHardMetric->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkFastlock->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkViterbi->setStyleSheet("QCheckBox { color: gray }");
+    }
+
+    if (m_settings.m_standard == DATVDemodSettings::dvb_version::DVB_S) {
+        ui->statusText->clear();
+    }
+
+    ui->cmbFilter->setCurrentIndex((int) m_settings.m_filter);
+    displayRRCParameters(((int) m_settings.m_filter == 2));
+
+    ui->spiRollOff->setValue((int) (m_settings.m_rollOff * 100.0f));
+    ui->audioMute->setChecked(m_settings.m_audioMute);
+    displaySystemConfiguration();
+    ui->cmbStandard->setCurrentIndex((int) m_settings.m_standard);
+    ui->spiNotchFilters->setValue(m_settings.m_notchFilters);
+    ui->rfBandwidth->setValue(m_settings.m_rfBandwidth);
+    ui->spiSymbolRate->setValue(m_settings.m_symbolRate);
+    ui->spiExcursion->setValue(m_settings.m_excursion);
+    ui->audioVolume->setValue(m_settings.m_audioVolume);
+    ui->audioVolumeText->setText(tr("%1").arg(m_settings.m_audioVolume));
+    ui->videoMute->setChecked(m_settings.m_videoMute);
+    ui->udpTS->setChecked(m_settings.m_udpTS);
+    ui->udpTSAddress->setText(m_settings.m_udpTSAddress);
+    ui->udpTSPort->setText(tr("%1").arg(m_settings.m_udpTSPort));
+
+    blockApplySettings(false);
+    m_objChannelMarker.blockSignals(false);
+}
+
+void DATVDemodGUI::displaySystemConfiguration()
+{
+    ui->cmbModulation->blockSignals(true);
+    ui->cmbFEC->blockSignals(true);
+
+    std::vector<DATVDemodSettings::DATVModulation> modulations;
+    DATVDemodSettings::getAvailableModulations(m_settings.m_standard, modulations);
+    std::vector<DATVDemodSettings::DATVCodeRate> codeRates;
+    DATVDemodSettings::getAvailableCodeRates(m_settings.m_standard, m_settings.m_modulation, codeRates);
+
+    ui->cmbModulation->clear();
+    int modulationIndex = 0;
+    int i;
+    std::vector<DATVDemodSettings::DATVModulation>::const_iterator mIt = modulations.begin();
+
+    for (i = 0; mIt != modulations.end(); ++mIt, i++)
+    {
+        ui->cmbModulation->addItem(DATVDemodSettings::getStrFromModulation(*mIt));
+
+        if (m_settings.m_modulation == *mIt) {
+            modulationIndex = i;
+        }
+    }
+
+    ui->cmbFEC->clear();
+    int rateIndex = 0;
+    std::vector<DATVDemodSettings::DATVCodeRate>::const_iterator rIt = codeRates.begin();
+
+    for (i = 0; rIt != codeRates.end(); ++rIt, i++)
+    {
+        ui->cmbFEC->addItem(DATVDemodSettings::getStrFromCodeRate(*rIt));
+
+        if (m_settings.m_fec == *rIt) {
+            rateIndex = i;
+        }
+    }
+
+    ui->cmbModulation->setCurrentIndex(modulationIndex);
+    ui->cmbFEC->setCurrentIndex(rateIndex);
+
+    ui->cmbModulation->blockSignals(false);
+    ui->cmbFEC->blockSignals(false);
+}
+
+void DATVDemodGUI::applySettings(bool force)
+{
     if (m_blnDoApplySettings)
     {
-        //Bandwidth and center frequency
-        m_objChannelMarker.setCenterFrequency(ui->deltaFrequency->getValueNew());
-        m_objChannelMarker.setBandwidth(ui->rfBandwidth->getValueNew());
-
-        DATVDemod::MsgConfigureChannelizer *msgChan = DATVDemod::MsgConfigureChannelizer::create(m_objChannelMarker.getCenterFrequency());
-        m_objDATVDemod->getInputMessageQueue()->push(msgChan);
+        qDebug("DATVDemodGUI::applySettings");
 
         setTitleColor(m_objChannelMarker.getColor());
 
-        strStandard = ui->cmbStandard->currentText();
+        QString msg = tr("DATVDemodGUI::applySettings: force: %1").arg(force ? "true" : "false");
+        m_settings.debug(msg);
 
-        if(strStandard=="DVB-S")
-        {
-            enmVersion=DVB_S;
-        }
-        else if (strStandard=="DVB-S2")
-        {
-            enmVersion=DVB_S2;
-        }
-        else
-        {
-            enmVersion=DVB_S;
-        }
-
-
-        //BPSK, QPSK, PSK8, APSK16, APSK32, APSK64E, QAM16, QAM64, QAM256
-
-        strModulation = ui->cmbModulation->currentText();
-
-        if(strModulation=="BPSK")
-        {
-            enmSelectedModulation=BPSK;
-        }
-        else if(strModulation=="QPSK")
-        {
-            enmSelectedModulation=QPSK;
-        }
-        else if(strModulation=="8PSK")
-        {
-            enmSelectedModulation=PSK8;
-        }
-        else if(strModulation=="16APSK")
-        {
-            enmSelectedModulation=APSK16;
-        }
-        else if(strModulation=="32APSK")
-        {
-            enmSelectedModulation=APSK32;
-        }
-        else if(strModulation=="64APSKE")
-        {
-            enmSelectedModulation=APSK64E;
-        }
-        else if(strModulation=="16QAM")
-        {
-            enmSelectedModulation=QAM16;
-        }
-        else if(strModulation=="64QAM")
-        {
-            enmSelectedModulation=QAM64;
-        }
-        else if(strModulation=="256QAM")
-        {
-            enmSelectedModulation=QAM256;
-        }
-        else
-        {
-            enmSelectedModulation=BPSK;
-        }
-
-        //Viterbi only for BPSK et QPSK
-        if((enmSelectedModulation!=BPSK) && (enmSelectedModulation!=QPSK))
-        {
-            ui->chkViterbi->setChecked(false);
-        }
-
-
-        strFEC = ui->cmbFEC->currentText();
-
-        if(strFEC == "1/2")
-        {
-            enmFEC = leansdr::FEC12;
-        }
-        else if(strFEC == "2/3")
-        {
-            enmFEC = leansdr::FEC23;
-        }
-        else if(strFEC == "3/4")
-        {
-            enmFEC = leansdr::FEC34;
-        }
-        else if(strFEC == "5/6")
-        {
-            enmFEC = leansdr::FEC56;
-        }
-        else if(strFEC == "7/8")
-        {
-            enmFEC = leansdr::FEC78;
-        }
-        else if(strFEC == "4/5")
-        {
-            enmFEC = leansdr::FEC45;
-        }
-        else if(strFEC == "8/9")
-        {
-            enmFEC = leansdr::FEC89;
-        }
-        else if(strFEC == "9/10")
-        {
-            enmFEC = leansdr::FEC910;
-        }
-        else
-        {
-            enmFEC = leansdr::FEC12;
-        }
-
-        if (ui->cmbFilter->currentIndex()==0)
-        {
-            enmSampler = SAMP_LINEAR;
-        }
-        else if(ui->cmbFilter->currentIndex()==1)
-        {
-            enmSampler = SAMP_NEAREST;
-        }
-        else
-        {
-            enmSampler = SAMP_RRC;
-        }
-
-
-        m_objDATVDemod->configure(
-            m_objDATVDemod->getInputMessageQueue(),
-            m_objChannelMarker.getBandwidth(),
-            m_objChannelMarker.getCenterFrequency(),
-            enmVersion,
-            enmSelectedModulation,
-            enmFEC,
-            ui->spiSymbolRate->value(),
-            ui->spiNotchFilters->value(),
-            ui->chkAllowDrift->isChecked(),
-            ui->chkFastlock->isChecked(),
-            enmSampler,
-            ui->chkHardMetric->isChecked(),
-            ((float)ui->spiRollOff->value())/100.0f,
-            ui->chkViterbi->isChecked(),
-            ui->spiExcursion->value());
-
-        qDebug() << "DATVDemodGUI::applySettings:"
-                << " m_objDATVDemod->getCenterFrequency: " << m_objDATVDemod->getCenterFrequency()
-                << " m_objDATVDemod->GetSampleRate: " << m_objDATVDemod->GetSampleRate();
+        DATVDemod::MsgConfigureDATVDemod* message = DATVDemod::MsgConfigureDATVDemod::create(m_settings, force);
+	    m_objDATVDemod->getInputMessageQueue()->push(message);
     }
 }
 
@@ -506,6 +373,19 @@ void DATVDemodGUI::enterEvent(QEvent*)
     blockApplySettings(false);
 }
 
+void DATVDemodGUI::audioSelect()
+{
+    qDebug("AMDemodGUI::audioSelect");
+    AudioSelectDialog audioSelect(DSPEngine::instance()->getAudioDeviceManager(), m_settings.m_audioDeviceName);
+    audioSelect.exec();
+
+    if (audioSelect.m_selected)
+    {
+        m_settings.m_audioDeviceName = audioSelect.m_audioDeviceName;
+        applySettings();
+    }
+}
+
 void DATVDemodGUI::tick()
 {
     if (m_objDATVDemod)
@@ -513,12 +393,60 @@ void DATVDemodGUI::tick()
         m_objMagSqAverage(m_objDATVDemod->getMagSq());
         double magSqDB = CalcDb::dbPower(m_objMagSqAverage / (SDR_RX_SCALED*SDR_RX_SCALED));
         ui->channePowerText->setText(tr("%1 dB").arg(magSqDB, 0, 'f', 1));
+
+        if ((m_modcodModulationIndex != m_objDATVDemod->getModcodModulation()) || (m_modcodCodeRateIndex != m_objDATVDemod->getModcodCodeRate()))
+        {
+            m_modcodModulationIndex = m_objDATVDemod->getModcodModulation();
+            m_modcodCodeRateIndex = m_objDATVDemod->getModcodCodeRate();
+            DATVDemodSettings::DATVModulation modulation = DATVDemodSettings::getModulationFromLeanDVBCode(m_modcodModulationIndex);
+            DATVDemodSettings::DATVCodeRate rate = DATVDemodSettings::getCodeRateFromLeanDVBCode(m_modcodCodeRateIndex);
+            QString modcodModulationStr = DATVDemodSettings::getStrFromModulation(modulation);
+            QString modcodCodeRateStr = DATVDemodSettings::getStrFromCodeRate(rate);
+            ui->statusText->setText(tr("MCOD %1 %2").arg(modcodModulationStr).arg(modcodCodeRateStr));
+        }
+
+        if (m_cstlnSetByModcod != m_objDATVDemod->isCstlnSetByModcod())
+        {
+            m_cstlnSetByModcod = m_objDATVDemod->isCstlnSetByModcod();
+
+            if (m_cstlnSetByModcod) {
+                ui->statusText->setStyleSheet("QLabel { background-color : green; }");
+            } else {
+                ui->statusText->setStyleSheet("QLabel { background:rgb(79,79,79); }");
+            }
+        }
     }
 
     if((m_intLastDecodedData-m_intPreviousDecodedData)>=0)
     {
         m_intLastSpeed = 8*(m_intLastDecodedData-m_intPreviousDecodedData);
         ui->lblRate->setText(QString("Speed: %1b/s").arg(formatBytes(m_intLastSpeed)));
+    }
+
+    if (m_objDATVDemod->audioActive())
+    {
+        if (m_objDATVDemod->audioDecodeOK()) {
+            ui->audioMute->setStyleSheet("QToolButton { background-color : green; }");
+        } else {
+            ui->audioMute->setStyleSheet("QToolButton { background-color : red; }");
+        }
+    }
+    else
+    {
+        ui->audioMute->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+    }
+
+    if (m_objDATVDemod->videoActive())
+    {
+		if (m_objDATVDemod->videoDecodeOK()) {
+			ui->videoMute->setStyleSheet("QToolButton { background-color : green; }");
+		} else {
+			ui->videoMute->setStyleSheet("QToolButton { background-color : red; }");
+		}
+    }
+    else
+    {
+        ui->videoMute->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
     }
 
     m_intPreviousDecodedData = m_intLastDecodedData;
@@ -529,163 +457,106 @@ void DATVDemodGUI::tick()
     return;
 }
 
-void DATVDemodGUI::on_cmbStandard_currentIndexChanged(const QString &arg1)
+void DATVDemodGUI::on_cmbStandard_currentIndexChanged(int index)
 {
-    (void) arg1;
+    m_settings.m_standard = (DATVDemodSettings::dvb_version) index;
+
+    if (m_settings.m_standard == DATVDemodSettings::dvb_version::DVB_S)
+    {
+        ui->chkAllowDrift->setEnabled(true);
+        ui->chkHardMetric->setEnabled(true);
+        ui->chkFastlock->setEnabled(true);
+        ui->chkViterbi->setEnabled(true);
+        ui->chkAllowDrift->setStyleSheet("QCheckBox { color: white }");
+        ui->chkHardMetric->setStyleSheet("QCheckBox { color: white }");
+        ui->chkFastlock->setStyleSheet("QCheckBox { color: white }");
+        ui->chkViterbi->setStyleSheet("QCheckBox { color: white }");
+    }
+    else
+    {
+        ui->chkAllowDrift->setEnabled(false);
+        ui->chkHardMetric->setEnabled(false);
+        ui->chkFastlock->setEnabled(false);
+        ui->chkViterbi->setEnabled(false);
+        ui->chkAllowDrift->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkHardMetric->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkFastlock->setStyleSheet("QCheckBox { color: gray }");
+        ui->chkViterbi->setStyleSheet("QCheckBox { color: gray }");
+    }
+
+    if (m_settings.m_standard == DATVDemodSettings::dvb_version::DVB_S) {
+        ui->statusText->clear();
+    }
+
+    m_settings.validateSystemConfiguration();
+    displaySystemConfiguration();
     applySettings();
 }
 
 void DATVDemodGUI::on_cmbModulation_currentIndexChanged(const QString &arg1)
 {
     (void) arg1;
-    QString strModulation;
-    QString strFEC;
+    QString strModulation = ui->cmbModulation->currentText();
+    m_settings.m_modulation = DATVDemodSettings::getModulationFromStr(strModulation);
+    m_settings.validateSystemConfiguration();
+    displaySystemConfiguration();
 
-    strFEC = ui->cmbFEC->currentText();
-
-    strModulation = ui->cmbModulation->currentText();
-
-    if(strModulation=="16APSK")
+    //Viterbi only for BPSK and QPSK
+    if ((m_settings.m_modulation != DATVDemodSettings::BPSK)
+        && (m_settings.m_modulation != DATVDemodSettings::QPSK))
     {
-        if((strFEC!="2/3")
-            && (strFEC!="3/4")
-            && (strFEC!="4/5")
-            && (strFEC!="5/6")
-            && (strFEC!="4/6")
-            && (strFEC!="8/9")
-            && (strFEC!="9/10"))
-        {
-            //Reset modulation to 2/3
-
-            ui->cmbFEC->setCurrentIndex(1);
-        }
-        else
-        {
-            applySettings();
-        }
-    }
-    else if(strModulation=="32APSK")
-    {
-        if((strFEC!="3/4")
-            && (strFEC!="4/5")
-            && (strFEC!="5/6")
-            && (strFEC!="8/9")
-            && (strFEC!="9/10"))
-        {
-            //Reset modulation to 3/4
-
-            ui->cmbFEC->setCurrentIndex(2);
-        }
-        else
-        {
-            applySettings();
-        }
-    }
-    else
-    {
-        applySettings();
+        ui->chkViterbi->setChecked(false);
     }
 
+    applySettings();
 }
 
 void DATVDemodGUI::on_cmbFEC_currentIndexChanged(const QString &arg1)
 {
     (void) arg1;
-    QString strFEC;
-
-    strFEC = ui->cmbFEC->currentText();
-
-    if(ui->cmbModulation->currentText()=="16APSK")
-    {
-        if((strFEC!="2/3")
-            && (strFEC!="3/4")
-            && (strFEC!="4/5")
-            && (strFEC!="5/6")
-            && (strFEC!="4/6")
-            && (strFEC!="8/9")
-            && (strFEC!="9/10"))
-        {
-            //Reset modulation to BPSK
-
-            ui->cmbModulation->setCurrentIndex(0);
-        }
-        else
-        {
-            applySettings();
-        }
-    }
-    else if(ui->cmbModulation->currentText()=="32APSK")
-    {
-        if((strFEC!="3/4")
-            && (strFEC!="4/5")
-            && (strFEC!="5/6")
-            && (strFEC!="8/9")
-            && (strFEC!="9/10"))
-        {
-            //Reset modulation to BPSK
-
-            ui->cmbModulation->setCurrentIndex(0);
-        }
-        else
-        {
-            applySettings();
-        }
-    }
-    else
-    {
-        applySettings();
-    }
-
+    QString strFEC = ui->cmbFEC->currentText();
+    m_settings.m_fec = DATVDemodSettings::getCodeRateFromStr(strFEC);
+    applySettings();
 }
 
 void DATVDemodGUI::on_chkViterbi_clicked()
 {
+    m_settings.m_viterbi = ui->chkViterbi->isChecked();
     applySettings();
 }
 
 void DATVDemodGUI::on_chkHardMetric_clicked()
 {
+    m_settings.m_hardMetric = ui->chkHardMetric->isChecked();
     applySettings();
 }
 
-void DATVDemodGUI::on_pushButton_2_clicked()
+void DATVDemodGUI::on_resetDefaults_clicked()
 {
     resetToDefaults();
 }
 
-void DATVDemodGUI::on_spiSymbolRate_valueChanged(int arg1)
+void DATVDemodGUI::on_spiSymbolRate_valueChanged(int value)
 {
-    (void) arg1;
+    m_settings.m_symbolRate = value;
     applySettings();
 }
 
-void DATVDemodGUI::on_spiNotchFilters_valueChanged(int arg1)
+void DATVDemodGUI::on_spiNotchFilters_valueChanged(int value)
 {
-    (void) arg1;
+    m_settings.m_notchFilters = value;
     applySettings();
 }
 
 void DATVDemodGUI::on_chkAllowDrift_clicked()
 {
-     applySettings();
+    m_settings.m_allowDrift = ui->chkAllowDrift->isChecked();
+    applySettings();
 }
 
-void DATVDemodGUI::on_pushButton_3_clicked()
-{
-
-   m_blnButtonPlayClicked=true;
-
-   if(m_objDATVDemod!=NULL)
-   {
-       m_objDATVDemod->PlayVideo(true);
-   }
-}
-
-
-void DATVDemodGUI::on_pushButton_4_clicked()
+void DATVDemodGUI::on_fullScreen_clicked()
 {
     ui->screenTV_2->SetFullScreen(true);
-
 }
 
 void DATVDemodGUI::on_mouseEvent(QMouseEvent* obj)
@@ -695,16 +566,11 @@ void DATVDemodGUI::on_mouseEvent(QMouseEvent* obj)
 
 QString DATVDemodGUI::formatBytes(qint64 intBytes)
 {
-    if(intBytes<1024)
-    {
+    if(intBytes<1024) {
         return QString("%1").arg(intBytes);
-    }
-    else if(intBytes<1024*1024)
-    {
+    } else if(intBytes<1024*1024) {
         return QString("%1 K").arg((float)(10*intBytes/1024)/10.0f);
-    }
-    else if(intBytes<1024*1024*1024)
-    {
+    } else if(intBytes<1024*1024*1024) {
         return QString("%1 M").arg((float)(10*intBytes/(1024*1024))/10.0f);
     }
 
@@ -718,39 +584,57 @@ void DATVDemodGUI::on_StreamDataAvailable(int *intPackets, int *intBytes, int *i
     ui->lblStatus->setText(QString("Data: %1B").arg(formatBytes(*intTotalReceived)));
     m_intLastDecodedData = *intTotalReceived;
 
-    if((*intPercent)<100)
-    {
-         ui->prgSynchro->setValue(*intPercent);
-    }
-    else
-    {
-         ui->prgSynchro->setValue(100);
+    if((*intPercent)<100) {
+        ui->prgSynchro->setValue(*intPercent);
+    } else {
+        ui->prgSynchro->setValue(100);
     }
 
     m_intReadyDecodedData = *intBytes;
-
-}
-
-void DATVDemodGUI::on_spiBandwidth_valueChanged(int arg1)
-{
-    (void) arg1;
-    applySettings();
 }
 
 void DATVDemodGUI::on_deltaFrequency_changed(qint64 value)
 {
-    (void) value;
+    m_objChannelMarker.setCenterFrequency(value);
+    m_settings.m_centerFrequency = m_objChannelMarker.getCenterFrequency();
     applySettings();
 }
 
 void DATVDemodGUI::on_rfBandwidth_changed(qint64 value)
 {
-    (void) value;
+    m_objChannelMarker.setBandwidth(value);
+    m_settings.m_rfBandwidth = m_objChannelMarker.getBandwidth();
     applySettings();
 }
 
 void DATVDemodGUI::on_chkFastlock_clicked()
 {
+    m_settings.m_fastLock = ui->chkFastlock->isChecked();
+    applySettings();
+}
+
+void DATVDemodGUI::on_audioMute_toggled(bool checked)
+{
+    m_settings.m_audioMute = checked;
+	applySettings();
+}
+
+void DATVDemodGUI::on_videoMute_toggled(bool checked)
+{
+    m_settings.m_videoMute = checked;
+	applySettings();
+}
+
+void DATVDemodGUI::on_audioVolume_valueChanged(int value)
+{
+    ui->audioVolumeText->setText(tr("%1").arg(value));
+    m_settings.m_audioVolume = value;
+    applySettings();
+}
+
+void DATVDemodGUI::on_udpTS_clicked(bool checked)
+{
+    m_settings.m_udpTS = checked;
     applySettings();
 }
 
@@ -758,37 +642,26 @@ void DATVDemodGUI::on_StreamMetaDataChanged(DataTSMetaData2 *objMetaData)
 {
     QString strMetaData="";
 
-    if(objMetaData!=NULL)
+    if (objMetaData != nullptr)
     {
-
-        if(objMetaData->OK_TransportStream==true)
+        if (objMetaData->OK_TransportStream == true)
         {
             strMetaData.sprintf("PID: %d - Width: %d - Height: %d\r\n%s%s\r\nCodec: %s\r\n",
-                    objMetaData->PID,
-                    objMetaData->Width,
-                    objMetaData->Height,
-                    objMetaData->Program.toStdString().c_str(),
-                    objMetaData->Stream.toStdString().c_str(),
-                    objMetaData->CodecDescription.toStdString().c_str());
+                objMetaData->PID,
+                objMetaData->Width,
+                objMetaData->Height,
+                objMetaData->Program.toStdString().c_str(),
+                objMetaData->Stream.toStdString().c_str(),
+                objMetaData->CodecDescription.toStdString().c_str());
         }
-        ui->textEdit->setText(strMetaData);
 
+        ui->streamInfo->setText(strMetaData);
         ui->chkData->setChecked(objMetaData->OK_Data);
         ui->chkTS->setChecked(objMetaData->OK_TransportStream);
         ui->chkVS->setChecked(objMetaData->OK_VideoStream);
         ui->chkDecoding->setChecked(objMetaData->OK_Decoding);
 
-        if(objMetaData->OK_Decoding==true)
-        {
-            ui->pushButton_3->setIcon(style()->standardIcon(QStyle::SP_MediaPause));
-        }
-        else
-        {
-            ui->pushButton_3->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-        }
-
-        if(objMetaData->Height>0)
-        {
+        if (objMetaData->Height > 0) {
             ui->screenTV_2->setFixedWidth((int)objMetaData->Width*(270.0f/(float)objMetaData->Height));
         }
     }
@@ -798,26 +671,52 @@ void DATVDemodGUI::displayRRCParameters(bool blnVisible)
 {
     ui->spiRollOff->setVisible(blnVisible);
     ui->spiExcursion->setVisible(blnVisible);
-    ui->label_5->setVisible(blnVisible);
-    ui->label_6->setVisible(blnVisible);
+    ui->rollOffLabel->setVisible(blnVisible);
+    ui->excursionLabel->setVisible(blnVisible);
 }
 
 void DATVDemodGUI::on_cmbFilter_currentIndexChanged(int index)
 {
-    (void) index;
-    displayRRCParameters((ui->cmbFilter->currentIndex()==2));
+    if (index == 0) {
+        m_settings.m_filter = DATVDemodSettings::SAMP_LINEAR;
+    } else if (index == 1) {
+        m_settings.m_filter = DATVDemodSettings::SAMP_NEAREST;
+    } else {
+        m_settings.m_filter = DATVDemodSettings::SAMP_RRC;
+    }
 
+    displayRRCParameters(index == 2);
     applySettings();
 }
 
-void DATVDemodGUI::on_spiRollOff_valueChanged(int arg1)
+void DATVDemodGUI::on_spiRollOff_valueChanged(int value)
 {
-    (void) arg1;
+    m_settings.m_rollOff = ((float) value) / 100.0f;
     applySettings();
 }
 
-void DATVDemodGUI::on_spiExcursion_valueChanged(int arg1)
+void DATVDemodGUI::on_spiExcursion_valueChanged(int value)
 {
-    (void) arg1;
+    m_settings.m_excursion = value;
+    applySettings();
+}
+
+void DATVDemodGUI::on_udpTSAddress_editingFinished()
+{
+    m_settings.m_udpTSAddress = ui->udpTSAddress->text();
+    applySettings();
+}
+
+void DATVDemodGUI::on_udpTSPort_editingFinished()
+{
+    bool ok;
+    quint16 udpPort = ui->udpTSPort->text().toInt(&ok);
+
+    if((!ok) || (udpPort < 1024)) {
+        udpPort = 8882;
+    }
+
+    m_settings.m_udpTSPort = udpPort;
+    ui->udpTSPort->setText(tr("%1").arg(udpPort));
     applySettings();
 }

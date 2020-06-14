@@ -1,3 +1,22 @@
+///////////////////////////////////////////////////////////////////////////////////
+// Copyright (C) 2015-2019 Edouard Griffiths, F4EXB.                             //
+//                                                                               //
+// Swagger server adapter interface                                              //
+//                                                                               //
+// This program is free software; you can redistribute it and/or modify          //
+// it under the terms of the GNU General Public License as published by          //
+// the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
+//                                                                               //
+// This program is distributed in the hope that it will be useful,               //
+// but WITHOUT ANY WARRANTY; without even the implied warranty of                //
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                  //
+// GNU General Public License V3 for more details.                               //
+//                                                                               //
+// You should have received a copy of the GNU General Public License             //
+// along with this program. If not, see <http://www.gnu.org/licenses/>.          //
+///////////////////////////////////////////////////////////////////////////////////
+
 #include "util/simpleserializer.h"
 #include "settings/preset.h"
 
@@ -8,21 +27,29 @@ Preset::Preset()
 	resetToDefaults();
 }
 
+Preset::Preset(const Preset& other) :
+	m_group(other.m_group),
+	m_description(other.m_description),
+	m_centerFrequency(other.m_centerFrequency),
+	m_spectrumConfig(other.m_spectrumConfig),
+	m_dcOffsetCorrection(other.m_dcOffsetCorrection),
+	m_iqImbalanceCorrection(other.m_iqImbalanceCorrection),
+	m_channelConfigs(other.m_channelConfigs),
+	m_deviceConfigs(other.m_deviceConfigs),
+	m_layout(other.m_layout)
+{}
+
 void Preset::resetToDefaults()
 {
-    m_sourcePreset = true;
+    m_presetType = PresetSource; // Rx
 	m_group = "default";
 	m_description = "no name";
 	m_centerFrequency = 0;
 	m_spectrumConfig.clear();
 	m_layout.clear();
-	m_spectrumConfig.clear();
 	m_channelConfigs.clear();
-	m_sourceId.clear();
-	m_sourceConfig.clear();
 	m_dcOffsetCorrection = false;
 	m_iqImbalanceCorrection = false;
-	m_sourceSequence = 0;
 }
 
 QByteArray Preset::serialize() const
@@ -40,7 +67,8 @@ QByteArray Preset::serialize() const
 	s.writeU64(3, m_centerFrequency);
 	s.writeBlob(4, m_layout);
 	s.writeBlob(5, m_spectrumConfig);
-	s.writeBool(6, m_sourcePreset);
+    s.writeBool(6, m_presetType == PresetSource);
+	s.writeS32(7, (int) m_presetType);
 
 	s.writeS32(20, m_deviceConfigs.size());
 
@@ -88,12 +116,21 @@ bool Preset::deserialize(const QByteArray& data)
 
 	if (d.getVersion() == 1)
 	{
+        bool tmpBool;
+        int tmp;
+
 		d.readString(1, &m_group, "default");
 		d.readString(2, &m_description, "no name");
 		d.readU64(3, &m_centerFrequency, 0);
 		d.readBlob(4, &m_layout);
 		d.readBlob(5, &m_spectrumConfig);
-		d.readBool(6, &m_sourcePreset, true);
+		d.readBool(6, &tmpBool, true);
+        d.readS32(7, &tmp, PresetSource);
+        m_presetType = tmp < (int) PresetSource ? PresetSource : tmp > (int) PresetMIMO ? PresetMIMO : (PresetType) tmp;
+
+        if (m_presetType != PresetMIMO) {
+            m_presetType = tmpBool ? PresetSource : PresetSink;
+        }
 
 //		qDebug("Preset::deserialize: m_group: %s mode: %s m_description: %s m_centerFrequency: %llu",
 //				qPrintable(m_group),
@@ -197,7 +234,25 @@ void Preset::addOrUpdateDeviceConfig(const QString& sourceId,
 	}
 }
 
-const QByteArray* Preset::findBestDeviceConfig(const QString& sourceId,
+const QByteArray* Preset::findDeviceConfig(
+        const QString& deviceId,
+        const QString& deviceSerial,
+        int deviceSequence) const
+{
+    DeviceeConfigs::const_iterator it = m_deviceConfigs.begin();
+
+    for (; it != m_deviceConfigs.end(); ++it)
+	{
+        if ((it->m_deviceId == deviceId) && (it->m_deviceSerial == deviceSerial) && (it->m_deviceSerial == deviceSerial)) {
+            return &it->m_config;
+        }
+    }
+
+    return nullptr;
+}
+
+const QByteArray* Preset::findBestDeviceConfig(
+        const QString& sourceId,
 		const QString& sourceSerial,
 		int sourceSequence) const
 {
@@ -246,25 +301,25 @@ const QByteArray* Preset::findBestDeviceConfig(const QString& sourceId,
 	{
 		if (itMatchSequence != m_deviceConfigs.end()) // match sequence ?
 		{
-			qDebug("Preset::findBestSourceConfig: sequence matched: id: %s ser: %s seq: %d",
+			qDebug("Preset::findBestDeviceConfig: sequence matched: id: %s ser: %s seq: %d",
 				qPrintable(itMatchSequence->m_deviceId), qPrintable(itMatchSequence->m_deviceSerial), itMatchSequence->m_deviceSequence);
 			return &(itMatchSequence->m_config);
 		}
 		else if (itFirstOfKind != m_deviceConfigs.end()) // match source type ?
 		{
-			qDebug("Preset::findBestSourceConfig: first of kind matched: id: %s ser: %s seq: %d",
+			qDebug("Preset::findBestDeviceConfig: first of kind matched: id: %s ser: %s seq: %d",
 				qPrintable(itFirstOfKind->m_deviceId), qPrintable(itFirstOfKind->m_deviceSerial), itFirstOfKind->m_deviceSequence);
 			return &(itFirstOfKind->m_config);
 		}
 		else // definitely not found !
 		{
-			qDebug("Preset::findBestSourceConfig: no match");
-			return 0;
+			qDebug("Preset::findBestDeviceConfig: no match");
+			return nullptr;
 		}
 	}
 	else // exact match
 	{
-		qDebug("Preset::findBestSourceConfig: serial matched (exact): id: %s ser: %s",
+		qDebug("Preset::findBestDeviceConfig: serial matched (exact): id: %s ser: %s",
 			qPrintable(it->m_deviceId), qPrintable(it->m_deviceSerial));
 		return &(it->m_config);
 	}
@@ -319,7 +374,7 @@ const QByteArray* Preset::findBestDeviceConfigSoapy(const QString& sourceId, con
 		}
 		else
 		{
-			qDebug("Preset::findBestSourceConfig: first of kind matched: id: %s ser: %s seq: %d",
+			qDebug("Preset::findBestDeviceConfigSoapy: first of kind matched: id: %s ser: %s seq: %d",
 				qPrintable(itFirstOfKind->m_deviceId), qPrintable(itFirstOfKind->m_deviceSerial), itFirstOfKind->m_deviceSequence);
 			return &(itFirstOfKind->m_config);
 		}

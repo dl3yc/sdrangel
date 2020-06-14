@@ -4,11 +4,21 @@ FileSourceSettings:
     fileName:
       description: The name (path) of the file being read
       type: string
-    accelerationFactor:
-      description: Playback acceleration (1 if normal speed)
-      type: integer
     loop:
       description: 1 if playing in a loop else 0
+      type: integer
+    log2Interp:
+      type: integer
+    filterChainHash:
+      type: integer
+    gainDB:
+      type: integer
+    rgbColor:
+      type: integer
+    title:
+      type: string
+    streamIndex:
+      description: MIMO channel. Not relevant when connected to SI (single Rx).
       type: integer
     useReverseAPI:
       description: Synchronize with reverse API (1 for yes, 0 for no)
@@ -19,16 +29,18 @@ FileSourceSettings:
       type: integer
     reverseAPIDeviceIndex:
       type: integer
+    reverseAPIChannelIndex:
+      type: integer
 
 FileSourceReport:
   description: FileSource
   properties:
     fileName:
       type: string
-    sampleRate:
+    fileSampleRate:
       description: Record sample rate in S/s
       type: integer
-    sampleSize:
+    fileSampleSize:
       description: Record sample size in number of bits
       type: integer
     absoluteTime:
@@ -40,3 +52,23 @@ FileSourceReport:
     durationTime:
       description: Duration time string representation
       type: string
+    sampleRate:
+      description: Channel sample rate in S/s
+      type: integer
+    channelPowerDB:
+      description: power transmitted in channel (dB)
+      type: number
+      format: float
+
+FileSourceActions:
+  description: FileSource
+  properties:
+    play:
+      type: integer
+      description: >
+        Play or Pause stream
+          * 0 - Pause
+          * 1 - Play
+    seekMillis:
+      description: Move play cursor to this thousands of total time from the start
+      type: integer

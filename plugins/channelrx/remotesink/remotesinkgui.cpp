@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -14,13 +15,16 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#include "remotesinkgui.h"
+#include <QLocale>
 
-#include "device/devicesourceapi.h"
 #include "device/deviceuiset.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
+#include "dsp/hbfilterchainconverter.h"
+#include "dsp/dspcommands.h"
 #include "mainwindow.h"
 
+#include "remotesinkgui.h"
 #include "remotesink.h"
 #include "ui_remotesinkgui.h"
 
@@ -80,21 +84,24 @@ bool RemoteSinkGUI::deserialize(const QByteArray& data)
 
 bool RemoteSinkGUI::handleMessage(const Message& message)
 {
-    if (RemoteSink::MsgSampleRateNotification::match(message))
-    {
-        RemoteSink::MsgSampleRateNotification& notif = (RemoteSink::MsgSampleRateNotification&) message;
-        m_channelMarker.setBandwidth(notif.getSampleRate());
-        m_sampleRate = notif.getSampleRate();
-        updateTxDelayTime();
-        return true;
-    }
-    else if (RemoteSink::MsgConfigureRemoteSink::match(message))
+    if (RemoteSink::MsgConfigureRemoteSink::match(message))
     {
         const RemoteSink::MsgConfigureRemoteSink& cfg = (RemoteSink::MsgConfigureRemoteSink&) message;
         m_settings = cfg.getSettings();
         blockApplySettings(true);
         displaySettings();
         blockApplySettings(false);
+
+        return true;
+    }
+    else if (DSPSignalNotification::match(message))
+    {
+        DSPSignalNotification& cfg = (DSPSignalNotification&) message;
+        m_basebandSampleRate = cfg.getSampleRate();
+        qDebug("RemoteSinkGUI::handleMessage: DSPSignalNotification: m_basebandSampleRate: %d", m_basebandSampleRate);
+        updateTxDelayTime();
+        displayRateAndShift();
+
         return true;
     }
     else
@@ -108,7 +115,7 @@ RemoteSinkGUI::RemoteSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Bas
         ui(new Ui::RemoteSinkGUI),
         m_pluginAPI(pluginAPI),
         m_deviceUISet(deviceUISet),
-        m_sampleRate(0),
+        m_basebandSampleRate(0),
         m_tickCount(0)
 {
     ui->setupUi(this);
@@ -118,6 +125,7 @@ RemoteSinkGUI::RemoteSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Bas
 
     m_remoteSink = (RemoteSink*) channelrx;
     m_remoteSink->setMessageQueueToGUI(getInputMessageQueue());
+    m_basebandSampleRate = m_remoteSink->getBasebandSampleRate();
 
     m_channelMarker.blockSignals(true);
     m_channelMarker.setColor(m_settings.m_rgbColor);
@@ -135,8 +143,6 @@ RemoteSinkGUI::RemoteSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Bas
     connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
     //connect(&(m_deviceUISet->m_deviceSourceAPI->getMasterTimer()), SIGNAL(timeout()), this, SLOT(tick()));
 
-    m_time.start();
-
     displaySettings();
     applySettings(true);
 }
@@ -144,6 +150,7 @@ RemoteSinkGUI::RemoteSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Bas
 RemoteSinkGUI::~RemoteSinkGUI()
 {
     m_deviceUISet->removeRxChannelInstance(this);
+    delete m_remoteSink; // TODO: check this: when the GUI closes it has to delete the demodulator
     delete ui;
 }
 
@@ -168,7 +175,8 @@ void RemoteSinkGUI::displaySettings()
     m_channelMarker.blockSignals(true);
     m_channelMarker.setCenterFrequency(0);
     m_channelMarker.setTitle(m_settings.m_title);
-    m_channelMarker.setBandwidth(m_sampleRate); // TODO
+    m_channelMarker.setBandwidth(m_basebandSampleRate); // TODO
+    m_channelMarker.setMovable(false); // do not let user move the center arbitrarily
     m_channelMarker.blockSignals(false);
     m_channelMarker.setColor(m_settings.m_rgbColor); // activate signal on the last setting only
 
@@ -176,6 +184,7 @@ void RemoteSinkGUI::displaySettings()
     setWindowTitle(m_channelMarker.getTitle());
 
     blockApplySettings(true);
+    ui->decimationFactor->setCurrentIndex(m_settings.m_log2Decim);
     ui->dataAddress->setText(m_settings.m_dataAddress);
     ui->dataPort->setText(tr("%1").arg(m_settings.m_dataPort));
     QString s = QString::number(128 + m_settings.m_nbFECBlocks, 'f', 0);
@@ -184,7 +193,29 @@ void RemoteSinkGUI::displaySettings()
     ui->txDelayText->setText(tr("%1%").arg(m_settings.m_txDelay));
     ui->txDelay->setValue(m_settings.m_txDelay);
     updateTxDelayTime();
+    applyDecimation();
+    displayStreamIndex();
     blockApplySettings(false);
+}
+
+void RemoteSinkGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
+}
+
+void RemoteSinkGUI::displayRateAndShift()
+{
+    int shift = m_shiftFrequencyFactor * m_basebandSampleRate;
+    double channelSampleRate = ((double) m_basebandSampleRate) / (1<<m_settings.m_log2Decim);
+    QLocale loc;
+    ui->offsetFrequencyText->setText(tr("%1 Hz").arg(loc.toString(shift)));
+    ui->channelRateText->setText(tr("%1k").arg(QString::number(channelSampleRate / 1000.0, 'g', 5)));
+    m_channelMarker.setCenterFrequency(shift);
+    m_channelMarker.setBandwidth(channelSampleRate);
 }
 
 void RemoteSinkGUI::leaveEvent(QEvent*)
@@ -218,28 +249,60 @@ void RemoteSinkGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void RemoteSinkGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_remoteSink->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
+}
+
+void RemoteSinkGUI::on_decimationFactor_currentIndexChanged(int index)
+{
+    m_settings.m_log2Decim = index;
+    updateTxDelayTime();
+    applyDecimation();
+}
+
+void RemoteSinkGUI::on_position_valueChanged(int value)
+{
+    m_settings.m_filterChainHash = value;
+    applyPosition();
 }
 
 void RemoteSinkGUI::on_dataAddress_returnPressed()
@@ -305,9 +368,35 @@ void RemoteSinkGUI::updateTxDelayTime()
 {
     double txDelayRatio = m_settings.m_txDelay / 100.0;
     int samplesPerBlock = RemoteNbBytesPerBlock / sizeof(Sample);
-    double delay = m_sampleRate == 0 ? 0.0 : (127*samplesPerBlock*txDelayRatio) / m_sampleRate;
+    int channelSampleRate = m_basebandSampleRate / (1<<m_settings.m_log2Decim);
+    double delay = channelSampleRate == 0 ? 0.0 : (127*samplesPerBlock*txDelayRatio) / channelSampleRate;
     delay /= 128 + m_settings.m_nbFECBlocks;
     ui->txDelayTime->setText(tr("%1µs").arg(QString::number(delay*1e6, 'f', 0)));
+}
+
+void RemoteSinkGUI::applyDecimation()
+{
+    uint32_t maxHash = 1;
+
+    for (uint32_t i = 0; i < m_settings.m_log2Decim; i++) {
+        maxHash *= 3;
+    }
+
+    ui->position->setMaximum(maxHash-1);
+    ui->position->setValue(m_settings.m_filterChainHash);
+    m_settings.m_filterChainHash = ui->position->value();
+    applyPosition();
+}
+
+void RemoteSinkGUI::applyPosition()
+{
+    ui->filterChainIndex->setText(tr("%1").arg(m_settings.m_filterChainHash));
+    QString s;
+    m_shiftFrequencyFactor = HBFilterChainConverter::convertToString(m_settings.m_log2Decim, m_settings.m_filterChainHash, s);
+    ui->filterChainText->setText(s);
+
+    displayRateAndShift();
+    applySettings();
 }
 
 void RemoteSinkGUI::tick()

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,11 +22,13 @@
 #include "ammodgui.h"
 #endif
 #include "ammod.h"
+#include "ammodwebapiadapter.h"
 #include "ammodplugin.h"
 
 const PluginDescriptor AMModPlugin::m_pluginDescriptor = {
+    AMMod::m_channelId,
     QString("AM Modulator"),
-    QString("4.3.2"),
+    QString("4.12.3"),
     QString("(c) Edouard Griffiths, F4EXB"),
     QString("https://github.com/f4exb/sdrangel"),
     true,
@@ -53,25 +56,29 @@ void AMModPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* AMModPlugin::createTxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSource *txChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSource *txChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* AMModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel)
+PluginInstanceGUI* AMModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const
 {
 	return AMModGUI::create(m_pluginAPI, deviceUISet, txChannel);
 }
 #endif
 
-BasebandSampleSource* AMModPlugin::createTxChannelBS(DeviceSinkAPI *deviceAPI)
+BasebandSampleSource* AMModPlugin::createTxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new AMMod(deviceAPI);
 }
 
-ChannelSourceAPI* AMModPlugin::createTxChannelCS(DeviceSinkAPI *deviceAPI)
+ChannelAPI* AMModPlugin::createTxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new AMMod(deviceAPI);
 }
 
+ChannelWebAPIAdapter* AMModPlugin::createChannelWebAPIAdapter() const
+{
+	return new AMModWebAPIAdapter();
+}

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -34,8 +35,8 @@ const char *fcd_traits<ProPlus>::displayedName = "FunCube Dongle Pro+";
 const char *fcd_traits<Pro>::pluginDisplayedName = "FunCube Pro Input";
 const char *fcd_traits<ProPlus>::pluginDisplayedName = "FunCube Pro+ Input";
 
-const char *fcd_traits<Pro>::pluginVersion = "4.4.1";
-const char *fcd_traits<ProPlus>::pluginVersion = "4.4.1";
+const char *fcd_traits<Pro>::pluginVersion = "4.12.3";
+const char *fcd_traits<ProPlus>::pluginVersion = "4.12.3";
 
 const int64_t fcd_traits<Pro>::loLowLimitFreq = 64000000L;
 const int64_t fcd_traits<ProPlus>::loLowLimitFreq = 150000L;

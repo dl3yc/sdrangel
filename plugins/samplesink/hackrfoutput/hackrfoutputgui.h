@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -67,6 +68,7 @@ private:
 	DeviceUISet* m_deviceUISet;
 	bool m_forceSettings;
 	HackRFOutputSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
 	QTimer m_updateTimer;
 	QTimer m_statusTimer;
 	DeviceSampleSink* m_deviceSampleSink;
@@ -77,9 +79,12 @@ private:
     bool m_doApplySettings;
 
 	void displaySettings();
+    void displaySampleRate();
+    void displayFcTooltip();
 	void displayBandwidths();
 	void sendSettings();
     void updateSampleRateAndFrequency();
+    void updateFrequencyLimits();
     void blockApplySettings(bool block);
 
 private slots:
@@ -89,10 +94,13 @@ private slots:
 	void on_LOppm_valueChanged(int value);
 	void on_biasT_stateChanged(int state);
 	void on_interp_currentIndexChanged(int index);
+	void on_fcPos_currentIndexChanged(int index);
 	void on_lnaExt_stateChanged(int state);
 	void on_bbFilter_currentIndexChanged(int index);
 	void on_txvga_valueChanged(int value);
 	void on_startStop_toggled(bool checked);
+    void on_sampleRateMode_toggled(bool checked);
+    void on_transverter_clicked();
 	void updateHardware();
 	void updateStatus();
     void openDeviceSettingsDialog(const QPoint& p);

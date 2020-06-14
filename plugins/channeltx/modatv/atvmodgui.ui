@@ -50,7 +50,16 @@
     <property name="spacing">
      <number>3</number>
     </property>
-    <property name="margin">
+    <property name="leftMargin">
+     <number>2</number>
+    </property>
+    <property name="topMargin">
+     <number>2</number>
+    </property>
+    <property name="rightMargin">
+     <number>2</number>
+    </property>
+    <property name="bottomMargin">
      <number>2</number>
     </property>
     <item>
@@ -225,12 +234,6 @@
      <layout class="QHBoxLayout" name="rfBandwidthLayout">
       <item>
        <widget class="QComboBox" name="modulation">
-        <property name="maximumSize">
-         <size>
-          <width>60</width>
-          <height>16777215</height>
-         </size>
-        </property>
         <property name="toolTip">
          <string>Modulation type</string>
         </property>
@@ -680,12 +683,6 @@
       </item>
       <item>
        <widget class="QComboBox" name="standard">
-        <property name="maximumSize">
-         <size>
-          <width>70</width>
-          <height>16777215</height>
-         </size>
-        </property>
         <property name="toolTip">
          <string>TV standard scheme</string>
         </property>
@@ -706,12 +703,12 @@
         </item>
         <item>
          <property name="text">
-          <string>ShI</string>
+          <string>ShortI</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>ShNI</string>
+          <string>ShortNI</string>
          </property>
         </item>
         <item>

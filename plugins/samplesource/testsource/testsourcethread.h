@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,6 +17,8 @@
 
 #ifndef _TESTSOURCE_TESTSOURCETHREAD_H_
 #define _TESTSOURCE_TESTSOURCETHREAD_H_
+
+#include <map>
 
 #include <QThread>
 #include <QMutex>
@@ -131,6 +134,9 @@ private:
 	Decimators<qint32, qint16, SDR_RX_SAMP_SZ, 8> m_decimators_8;
     Decimators<qint32, qint16, SDR_RX_SAMP_SZ, 12> m_decimators_12;
     Decimators<qint32, qint16, SDR_RX_SAMP_SZ, 16> m_decimators_16;
+
+    std::map<int, int> m_timerHistogram;
+    uint32_t m_histoCounter;
 
 	void startWork();
 	void stopWork();

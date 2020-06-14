@@ -27,10 +27,13 @@ HackRFInputSettings:
       type: integer
     iqCorrection:
       type: integer
-    linkTxFrequency:
-      type: integer
     fileRecordName:
       type: string
+    transverterMode:
+      type: integer
+    transverterDeltaFrequency:
+      type: integer
+      format: int64
     useReverseAPI:
       description: Synchronize with reverse API (1 for yes, 0 for no)
       type: integer
@@ -40,6 +43,16 @@ HackRFInputSettings:
       type: integer
     reverseAPIDeviceIndex:
       type: integer
+
+HackRFInputActions:
+  description: HackRF
+  properties:
+    record:
+      type: integer
+      description: >
+        Record IQ stream action
+          * 0 - stop recording
+          * 1 - start recording
 
 HackRFOutputSettings:
   description: HackRF
@@ -55,12 +68,20 @@ HackRFOutputSettings:
       type: integer
     log2Interp:
       type: integer
+    fcPos:
+      description: 0=Infra 1=Supra 2=Center
+      type: integer
     devSampleRate:
       type: integer
     biasT:
       type: integer
     lnaExt:
       type: integer
+    transverterMode:
+      type: integer
+    transverterDeltaFrequency:
+      type: integer
+      format: int64
     useReverseAPI:
       description: Synchronize with reverse API (1 for yes, 0 for no)
       type: integer
@@ -70,3 +91,4 @@ HackRFOutputSettings:
       type: integer
     reverseAPIDeviceIndex:
       type: integer
+

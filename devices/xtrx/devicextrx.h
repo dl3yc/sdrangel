@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,8 +18,10 @@
 #ifndef DEVICES_XTRX_DEVICEXTRX_H_
 #define DEVICES_XTRX_DEVICEXTRX_H_
 
+#include <QString>
 #include <stdint.h>
 
+#include "plugin/plugininterface.h"
 #include "export.h"
 
 struct strx_dev;
@@ -31,8 +34,9 @@ public:
 
     bool open(const char* deviceStr);
     void close();
+    static void enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices);
     struct xtrx_dev *getDevice() { return m_dev; }
-    double set_samplerate(double rate, double master, bool output);
+    double setSamplerate(double rate, double master, bool output);
     double getMasterRate() const { return m_masterRate; }
     double getClockGen() const { return m_clockGen; }
     double getActualInputRate() const { return m_actualInputRate; }
@@ -40,7 +44,7 @@ public:
     static void getAutoGains(uint32_t autoGain, uint32_t& lnaGain, uint32_t& tiaGain, uint32_t& pgaGain);
 
     static const uint32_t m_nbGains = 74;
-    static const unsigned int blockSize = (1<<13);
+    static const unsigned int blockSize = (1<<12);
 
 private:
     struct xtrx_dev *m_dev; //!< device handle

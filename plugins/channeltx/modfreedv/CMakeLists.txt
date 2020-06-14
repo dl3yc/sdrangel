@@ -1,52 +1,64 @@
 project(modfreedv)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
 set(modfreedv_SOURCES
     freedvmod.cpp
-    freedvmodgui.cpp
+    freedvmodbaseband.cpp
+    freedvmodsource.cpp
     freedvmodplugin.cpp
     freedvmodsettings.cpp
+    freedvmodwebapiadapter.cpp
 )
 
 set(modfreedv_HEADERS
     freedvmod.h
-    freedvmodgui.h
+    freedvmodbaseband.h
+    freedvmodsource.h
     freedvmodplugin.h
     freedvmodsettings.h
-)
-
-set(modfreedv_FORMS
-    freedvmodgui.ui
+    freedvmodwebapiadapter.h
 )
 
 include_directories(
-    .
-    ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/swagger/sdrangel/code/qt5/client
     ${CODEC2_INCLUDE_DIR}
 )
 
-add_definitions(${QT_DEFINITIONS})
-add_definitions(-DQT_PLUGIN)
-add_definitions(-DQT_SHARED)
+if(NOT SERVER_MODE)
+    set(modfreedv_SOURCES
+        ${modfreedv_SOURCES}
+        freedvmodgui.cpp
+        freedvmodgui.ui
+    )
+    set(modfreedv_HEADERS
+        ${modfreedv_HEADERS}
+        freedvmodgui.h
+    )
+    set(TARGET_NAME modfreedv)
+    set(TARGET_LIB "Qt5::Widgets")
+    set(TARGET_LIB_GUI "sdrgui")
+    set(INSTALL_FOLDER ${INSTALL_PLUGINS_DIR})
+else()
+    set(TARGET_NAME modfreedvsrv)
+    set(TARGET_LIB "")
+    set(TARGET_LIB_GUI "")
+    set(INSTALL_FOLDER ${INSTALL_PLUGINSSRV_DIR})
+endif()
 
-qt5_wrap_ui(modfreedv_FORMS_HEADERS ${modfreedv_FORMS})
-
-add_library(modfreedv SHARED
-    ${modfreedv_SOURCES}
-    ${modfreedv_HEADERS_MOC}
-    ${modfreedv_FORMS_HEADERS}
+add_library(${TARGET_NAME} SHARED
+	${modfreedv_SOURCES}
 )
 
-target_link_libraries(modfreedv
-    ${QT_LIBRARIES}
-    sdrbase
-    sdrgui
+if(CODEC2_EXTERNAL)
+    add_dependencies(${TARGET_NAME} codec2)
+endif()
+
+target_link_libraries(${TARGET_NAME}
+    Qt5::Core
+    ${TARGET_LIB}
+	sdrbase
+	${TARGET_LIB_GUI}
     swagger
     ${CODEC2_LIBRARIES}
 )
 
-target_link_libraries(modfreedv Qt5::Core Qt5::Widgets)
-
-install(TARGETS modfreedv DESTINATION lib/plugins/channeltx)
+install(TARGETS ${TARGET_NAME} DESTINATION ${INSTALL_FOLDER})

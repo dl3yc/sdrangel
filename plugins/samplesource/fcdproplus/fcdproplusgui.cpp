@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,6 +17,7 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include "ui_fcdproplusgui.h"
 #include "gui/colormapper.h"
@@ -26,7 +28,7 @@
 #include "dsp/dspcommands.h"
 #include "fcdproplusgui.h"
 
-#include <device/devicesourceapi.h>
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "fcdproplusconst.h"
 #include "fcdtraits.h"
@@ -38,9 +40,9 @@ FCDProPlusGui::FCDProPlusGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_forceSettings(true),
 	m_settings(),
 	m_sampleSource(NULL),
-	m_lastEngineState(DSPDeviceSourceEngine::StNotStarted)
+	m_lastEngineState(DeviceAPI::StNotStarted)
 {
-    m_sampleSource = (FCDProPlusInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_sampleSource = (FCDProPlusInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
 	ui->setupUi(this);
 
@@ -65,6 +67,9 @@ FCDProPlusGui::FCDProPlusGui(DeviceUISet *deviceUISet, QWidget* parent) :
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
 	displaySettings();
 
@@ -150,6 +155,23 @@ bool FCDProPlusGui::handleMessage(const Message& message)
         ui->startStop->setChecked(notif.getStartStop());
         blockApplySettings(false);
 
+        return true;
+    }
+    else if (FCDProPlusInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const FCDProPlusInput::MsgFileRecord& notif = (const FCDProPlusInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
         return true;
     }
     else
@@ -285,24 +307,24 @@ void FCDProPlusGui::updateHardware()
 
 void FCDProPlusGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSourceEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSourceEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSourceEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSourceEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -401,4 +423,30 @@ void FCDProPlusGui::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void FCDProPlusGui::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

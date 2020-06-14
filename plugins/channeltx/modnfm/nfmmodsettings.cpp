@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -48,7 +49,7 @@ void NFMModSettings::resetToDefaults()
     m_afBandwidth = 3000;
     m_inputFrequencyOffset = 0;
     m_rfBandwidth = 12500.0f;
-    m_fmDeviation = 5000.0f;
+    m_fmDeviation = 3000.0f;
     m_toneFrequency = 1000.0f;
     m_volumeFactor = 1.0f;
     m_channelMute = false;
@@ -59,6 +60,10 @@ void NFMModSettings::resetToDefaults()
     m_title = "NFM Modulator";
     m_modAFInput = NFMModInputAF::NFMModInputNone;
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_feedbackAudioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_feedbackVolumeFactor = 0.5f;
+    m_feedbackAudioEnable = false;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -80,6 +85,8 @@ QByteArray NFMModSettings::serialize() const
 
     if (m_cwKeyerGUI) {
         s.writeBlob(8, m_cwKeyerGUI->serialize());
+    } else { // standalone operation with presets
+        s.writeBlob(6, m_cwKeyerSettings.serialize());
     }
 
     if (m_channelMarker) {
@@ -96,6 +103,10 @@ QByteArray NFMModSettings::serialize() const
     s.writeU32(17, m_reverseAPIPort);
     s.writeU32(18, m_reverseAPIDeviceIndex);
     s.writeU32(19, m_reverseAPIChannelIndex);
+    s.writeString(20, m_feedbackAudioDeviceName);
+    s.writeReal(21, m_feedbackVolumeFactor);
+    s.writeBool(22, m_feedbackAudioEnable);
+    s.writeS32(23, m_streamIndex);
 
     return s.final();
 }
@@ -120,14 +131,16 @@ bool NFMModSettings::deserialize(const QByteArray& data)
         m_inputFrequencyOffset = tmp;
         d.readReal(2, &m_rfBandwidth, 12500.0);
         d.readReal(3, &m_afBandwidth, 1000.0);
-        d.readReal(4, &m_fmDeviation, 5000.0);
+        d.readReal(4, &m_fmDeviation, 3000.0);
         d.readU32(5, &m_rgbColor);
         d.readReal(6, &m_toneFrequency, 1000.0);
         d.readReal(7, &m_volumeFactor, 1.0);
+        d.readBlob(8, &bytetmp);
 
         if (m_cwKeyerGUI) {
-            d.readBlob(8, &bytetmp);
             m_cwKeyerGUI->deserialize(bytetmp);
+        } else { // standalone operation with presets
+            m_cwKeyerSettings.deserialize(bytetmp);
         }
 
         d.readBool(9, &m_ctcssOn, false);
@@ -163,6 +176,10 @@ bool NFMModSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(19, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readString(20, &m_feedbackAudioDeviceName, AudioDeviceManager::m_defaultDeviceName);
+        d.readReal(21, &m_feedbackVolumeFactor, 1.0);
+        d.readBool(22, &m_feedbackAudioEnable, false);
+        d.readS32(23, &m_streamIndex, 0);
 
         return true;
     }

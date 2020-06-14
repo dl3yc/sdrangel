@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -89,8 +90,7 @@ public:
     ThreadInterface      *m_thread;          //!< holds the thread address if started else 0
     bool                 m_threadWasRunning; //!< flag to know if thread needs to be resumed after suspend
 
-    static const float  m_sampleFifoLengthInSeconds;
-    static const int    m_sampleFifoMinSize;
+    static const unsigned int m_sampleFifoMinRate;
 
     DevicePlutoSDRShared() :
         m_deviceParams(0),

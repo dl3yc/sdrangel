@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -35,7 +36,8 @@ public:
         int         m_sequence;
     };
 
-    void scan(int nbDevices);
+    bool scan(int nbDevices); //!< false if one device had its firmware not yet downloaded
+    void clear();
     int getNbActiveDevices() const { return m_scans.size(); }
     const std::string* getSerialAt(unsigned int index) const;
     uint16_t getSerialNumberAt(unsigned int index) const ;

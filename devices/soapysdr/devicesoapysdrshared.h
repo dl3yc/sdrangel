@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -109,9 +110,7 @@ public:
     SoapySDRInput *m_source;
     SoapySDROutput *m_sink;
 
-    static const float m_sampleFifoLengthInSeconds;
-    static const int   m_sampleFifoMinSize;
-    static const int   m_sampleFifoMinSize32;
+    static const unsigned int m_sampleFifoMinRate;
 };
 
 

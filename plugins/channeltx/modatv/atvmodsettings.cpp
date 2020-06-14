@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -50,6 +51,7 @@ void ATVModSettings::resetToDefaults()
     m_overlayText = "ATV";
     m_rgbColor = QColor(255, 255, 255).rgb();
     m_title = "ATV Modulator";
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -86,6 +88,9 @@ QByteArray ATVModSettings::serialize() const
     s.writeU32(19, m_reverseAPIPort);
     s.writeU32(20, m_reverseAPIDeviceIndex);
     s.writeU32(21, m_reverseAPIChannelIndex);
+    s.writeString(22, m_imageFileName);
+    s.writeString(23, m_videoFileName);
+    s.writeS32(24, m_streamIndex);
 
     return s.final();
 }
@@ -149,6 +154,10 @@ bool ATVModSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(21, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readString(22, &m_imageFileName);
+        d.readString(23, &m_videoFileName);
+        d.readS32(24, &m_streamIndex, 0);
+
         return true;
     }
     else

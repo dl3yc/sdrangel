@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,8 +31,7 @@
 
 #include "dsp/dspcommands.h"
 #include "dsp/dspengine.h"
-#include "device/devicesinkapi.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "bladerf2/devicebladerf2shared.h"
 #include "bladerf2/devicebladerf2.h"
 
@@ -42,15 +42,16 @@ MESSAGE_CLASS_DEFINITION(BladeRF2Output::MsgConfigureBladeRF2, Message)
 MESSAGE_CLASS_DEFINITION(BladeRF2Output::MsgStartStop, Message)
 MESSAGE_CLASS_DEFINITION(BladeRF2Output::MsgReportGainRange, Message)
 
-BladeRF2Output::BladeRF2Output(DeviceSinkAPI *deviceAPI) :
+BladeRF2Output::BladeRF2Output(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
     m_settings(),
-    m_dev(0),
-    m_thread(0),
+    m_dev(nullptr),
+    m_thread(nullptr),
     m_deviceDescription("BladeRF2Output"),
     m_running(false)
 {
     openDevice();
+    m_deviceAPI->setNbSinkStreams(1);
     m_networkManager = new QNetworkAccessManager();
     connect(m_networkManager, SIGNAL(finished(QNetworkReply*)), this, SLOT(networkManagerFinished(QNetworkReply*)));
 }
@@ -74,14 +75,14 @@ void BladeRF2Output::destroy()
 
 bool BladeRF2Output::openDevice()
 {
-    m_sampleSourceFifo.resize(m_settings.m_devSampleRate/(1<<(m_settings.m_log2Interp <= 4 ? m_settings.m_log2Interp : 4)));
+    m_sampleSourceFifo.resize(SampleSourceFifo::getSizePolicy(m_settings.m_devSampleRate));
 
     // look for Tx buddies and get reference to the device object
     if (m_deviceAPI->getSinkBuddies().size() > 0) // look sink sibling first
     {
         qDebug("BladeRF2Output::openDevice: look in Tx buddies");
 
-        DeviceSinkAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
+        DeviceAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
         DeviceBladeRF2Shared *deviceBladeRF2Shared = (DeviceBladeRF2Shared*) sinkBuddy->getBuddySharedPtr();
 
         if (deviceBladeRF2Shared == 0)
@@ -105,7 +106,7 @@ bool BladeRF2Output::openDevice()
     {
         qDebug("BladeRF2Output::openDevice: look in Rx buddies");
 
-        DeviceSourceAPI *sourceBuddy = m_deviceAPI->getSourceBuddies()[0];
+        DeviceAPI *sourceBuddy = m_deviceAPI->getSourceBuddies()[0];
         DeviceBladeRF2Shared *deviceBladeRF2Shared = (DeviceBladeRF2Shared*) sourceBuddy->getBuddySharedPtr();
 
         if (deviceBladeRF2Shared == 0)
@@ -131,7 +132,7 @@ bool BladeRF2Output::openDevice()
 
         m_deviceShared.m_dev = new DeviceBladeRF2();
         char serial[256];
-        strcpy(serial, qPrintable(m_deviceAPI->getSampleSinkSerial()));
+        strcpy(serial, qPrintable(m_deviceAPI->getSamplingDeviceSerial()));
 
         if (!m_deviceShared.m_dev->open(serial))
         {
@@ -140,7 +141,7 @@ bool BladeRF2Output::openDevice()
         }
     }
 
-    m_deviceShared.m_channel = m_deviceAPI->getItemIndex(); // publicly allocate channel
+    m_deviceShared.m_channel = m_deviceAPI->getDeviceItemIndex(); // publicly allocate channel
     m_deviceShared.m_sink = this;
     m_deviceAPI->setBuddySharedPtr(&m_deviceShared); // propagate common parameters to API
     return true;
@@ -185,8 +186,8 @@ BladeRF2OutputThread *BladeRF2Output::findThread()
         BladeRF2OutputThread *bladeRF2OutputThread = 0;
 
         // find a buddy that has allocated the thread
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-        std::vector<DeviceSinkAPI*>::const_iterator it = sinkBuddies.begin();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sinkBuddies.begin();
 
         for (; it != sinkBuddies.end(); ++it)
         {
@@ -212,8 +213,8 @@ BladeRF2OutputThread *BladeRF2Output::findThread()
 
 void BladeRF2Output::moveThreadToBuddy()
 {
-    const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-    std::vector<DeviceSinkAPI*>::const_iterator it = sinkBuddies.begin();
+    const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+    std::vector<DeviceAPI*>::const_iterator it = sinkBuddies.begin();
 
     for (; it != sinkBuddies.end(); ++it)
     {
@@ -264,7 +265,7 @@ bool BladeRF2Output::start()
         return false;
     }
 
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     BladeRF2OutputThread *bladeRF2OutputThread = findThread();
     bool needsStart = false;
 
@@ -299,8 +300,8 @@ bool BladeRF2Output::start()
             }
 
             // remove old thread address from buddies (reset in all buddies)
-            const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-            std::vector<DeviceSinkAPI*>::const_iterator it = sinkBuddies.begin();
+            const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+            std::vector<DeviceAPI*>::const_iterator it = sinkBuddies.begin();
 
             for (; it != sinkBuddies.end(); ++it) {
                 ((DeviceBladeRF2Shared*) (*it)->getBuddySharedPtr())->m_sink->setThread(0);
@@ -376,7 +377,7 @@ void BladeRF2Output::stop()
         return;
     }
 
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     BladeRF2OutputThread *bladeRF2OutputThread = findThread();
 
     if (bladeRF2OutputThread == 0) { // no thread allocated
@@ -393,8 +394,8 @@ void BladeRF2Output::stop()
         m_thread = 0;
 
         // remove old thread address from buddies (reset in all buddies)
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-        std::vector<DeviceSinkAPI*>::const_iterator it = sinkBuddies.begin();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sinkBuddies.begin();
 
         for (; it != sinkBuddies.end(); ++it) {
             ((DeviceBladeRF2Shared*) (*it)->getBuddySharedPtr())->m_sink->setThread(0);
@@ -437,8 +438,8 @@ void BladeRF2Output::stop()
         }
 
         // remove old thread address from buddies (reset in all buddies)
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-        std::vector<DeviceSinkAPI*>::const_iterator it = sinkBuddies.begin();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sinkBuddies.begin();
 
         for (; it != sinkBuddies.end(); ++it) {
             ((DeviceBladeRF2Shared*) (*it)->getBuddySharedPtr())->m_sink->setThread(0);
@@ -610,7 +611,7 @@ bool BladeRF2Output::handleMessage(const Message& message)
 
         if (dev) // The BladeRF device must have been open to do so
         {
-            int requestedChannel = m_deviceAPI->getItemIndex();
+            int requestedChannel = m_deviceAPI->getDeviceItemIndex();
 
             if (report.getRxElseTx()) // Rx buddy change: check for sample rate change only
             {
@@ -673,14 +674,14 @@ bool BladeRF2Output::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initGeneration())
+            if (m_deviceAPI->initDeviceEngine())
             {
-                m_deviceAPI->startGeneration();
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopGeneration();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         if (m_settings.m_useReverseAPI) {
@@ -703,7 +704,7 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
     QList<QString> reverseAPIKeys;
 
     struct bladerf *dev = m_deviceShared.m_dev->getDev();
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     int nbChannels = getNbChannels();
     qint64 deviceCenterFrequency = settings.m_centerFrequency;
     deviceCenterFrequency -= settings.m_transverterMode ? settings.m_transverterDeltaFrequency : 0;
@@ -713,7 +714,7 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
     {
         reverseAPIKeys.append("devSampleRate");
         BladeRF2OutputThread *bladeRF2OutputThread = findThread();
-        SampleSourceFifo *fifo = 0;
+        SampleSourceFifo *fifo = nullptr;
 
         if (bladeRF2OutputThread)
         {
@@ -721,20 +722,15 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
             bladeRF2OutputThread->setFifo(requestedChannel, 0);
         }
 
-        int fifoSize;
-
-        if (settings.m_log2Interp >= 5)
-        {
-            fifoSize = DeviceBladeRF2Shared::m_sampleFifoMinSize32;
-        }
-        else
-        {
-            fifoSize = (std::max)(
-                (int) ((settings.m_devSampleRate/(1<<settings.m_log2Interp)) * DeviceBladeRF2Shared::m_sampleFifoLengthInSeconds),
-                DeviceBladeRF2Shared::m_sampleFifoMinSize);
-        }
-
-        m_sampleSourceFifo.resize(fifoSize);
+#if defined(_MSC_VER)
+        unsigned int fifoRate = (unsigned int) settings.m_devSampleRate / (1<<settings.m_log2Interp);
+        fifoRate = fifoRate < 48000U ? 48000U : fifoRate;
+#else
+        unsigned int fifoRate = std::max(
+            (unsigned int) settings.m_devSampleRate / (1<<settings.m_log2Interp),
+            DeviceBladeRF2Shared::m_sampleFifoMinRate);
+#endif
+        m_sampleSourceFifo.resize(SampleSourceFifo::getSizePolicy(fifoRate));
 
         if (fifo) {
             bladeRF2OutputThread->setFifo(requestedChannel, &m_sampleSourceFifo);
@@ -875,8 +871,8 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
     if (forwardChangeRxBuddies)
     {
         // send to source buddies
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        std::vector<DeviceSourceAPI*>::const_iterator itSource = sourceBuddies.begin();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        std::vector<DeviceAPI*>::const_iterator itSource = sourceBuddies.begin();
 
         for (; itSource != sourceBuddies.end(); ++itSource)
         {
@@ -886,15 +882,15 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
                     2,
                     settings.m_devSampleRate, // need to forward actual rate to the Rx side
                     false);
-            (*itSource)->getSampleSourceInputMessageQueue()->push(report);
+            (*itSource)->getSamplingDeviceInputMessageQueue()->push(report);
         }
     }
 
     if (forwardChangeTxBuddies)
     {
         // send to sink buddies
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
-        std::vector<DeviceSinkAPI*>::const_iterator itSink = sinkBuddies.begin();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        std::vector<DeviceAPI*>::const_iterator itSink = sinkBuddies.begin();
 
         for (; itSink != sinkBuddies.end(); ++itSink)
         {
@@ -904,7 +900,7 @@ bool BladeRF2Output::applySettings(const BladeRF2OutputSettings& settings, bool 
                     2,
                     settings.m_devSampleRate,
                     false);
-            (*itSink)->getSampleSinkInputMessageQueue()->push(report);
+            (*itSink)->getSamplingDeviceInputMessageQueue()->push(report);
         }
     }
 
@@ -965,7 +961,26 @@ int BladeRF2Output::webapiSettingsPutPatch(
 {
     (void) errorMessage;
     BladeRF2OutputSettings settings = m_settings;
+    webapiUpdateDeviceSettings(settings, deviceSettingsKeys, response);
 
+    MsgConfigureBladeRF2 *msg = MsgConfigureBladeRF2::create(settings, force);
+    m_inputMessageQueue.push(msg);
+
+    if (m_guiMessageQueue) // forward to GUI if any
+    {
+        MsgConfigureBladeRF2 *msgToGUI = MsgConfigureBladeRF2::create(settings, force);
+        m_guiMessageQueue->push(msgToGUI);
+    }
+
+    webapiFormatDeviceSettings(response, settings);
+    return 200;
+}
+
+void BladeRF2Output::webapiUpdateDeviceSettings(
+        BladeRF2OutputSettings& settings,
+        const QStringList& deviceSettingsKeys,
+        SWGSDRangel::SWGDeviceSettings& response)
+{
     if (deviceSettingsKeys.contains("centerFrequency")) {
         settings.m_centerFrequency = response.getBladeRf2OutputSettings()->getCenterFrequency();
     }
@@ -1005,18 +1020,6 @@ int BladeRF2Output::webapiSettingsPutPatch(
     if (deviceSettingsKeys.contains("reverseAPIDeviceIndex")) {
         settings.m_reverseAPIDeviceIndex = response.getBladeRf2OutputSettings()->getReverseApiDeviceIndex();
     }
-
-    MsgConfigureBladeRF2 *msg = MsgConfigureBladeRF2::create(settings, force);
-    m_inputMessageQueue.push(msg);
-
-    if (m_guiMessageQueue) // forward to GUI if any
-    {
-        MsgConfigureBladeRF2 *msgToGUI = MsgConfigureBladeRF2::create(settings, force);
-        m_guiMessageQueue->push(msgToGUI);
-    }
-
-    webapiFormatDeviceSettings(response, settings);
-    return 200;
 }
 
 int BladeRF2Output::webapiReportGet(SWGSDRangel::SWGDeviceReport& response, QString& errorMessage)
@@ -1122,7 +1125,8 @@ int BladeRF2Output::webapiRun(
 void BladeRF2Output::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const BladeRF2OutputSettings& settings, bool force)
 {
     SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
-    swgDeviceSettings->setTx(1);
+    swgDeviceSettings->setDirection(1); // single Tx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
     swgDeviceSettings->setDeviceHwType(new QString("BladeRF2"));
     swgDeviceSettings->setBladeRf2OutputSettings(new SWGSDRangel::SWGBladeRF2OutputSettings());
     SWGSDRangel::SWGBladeRF2OutputSettings *swgBladeRF2OutputSettings = swgDeviceSettings->getBladeRf2OutputSettings();
@@ -1164,30 +1168,46 @@ void BladeRF2Output::webapiReverseSendSettings(QList<QString>& deviceSettingsKey
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
     m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QBuffer *buffer=new QBuffer();
+    QBuffer *buffer = new QBuffer();
     buffer->open((QBuffer::ReadWrite));
     buffer->write(swgDeviceSettings->asJson().toUtf8());
     buffer->seek(0);
 
     // Always use PATCH to avoid passing reverse API settings
-    m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    buffer->setParent(reply);
 
     delete swgDeviceSettings;
 }
 
 void BladeRF2Output::webapiReverseSendStartStop(bool start)
 {
+    SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
+    swgDeviceSettings->setDirection(1); // single Tx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
+    swgDeviceSettings->setDeviceHwType(new QString("BladeRF2"));
+
     QString deviceSettingsURL = QString("http://%1:%2/sdrangel/deviceset/%3/device/run")
             .arg(m_settings.m_reverseAPIAddress)
             .arg(m_settings.m_reverseAPIPort)
             .arg(m_settings.m_reverseAPIDeviceIndex);
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
+    m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QBuffer *buffer = new QBuffer();
+    buffer->open((QBuffer::ReadWrite));
+    buffer->write(swgDeviceSettings->asJson().toUtf8());
+    buffer->seek(0);
+    QNetworkReply *reply;
 
     if (start) {
-        m_networkManager->sendCustomRequest(m_networkRequest, "POST");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "POST", buffer);
     } else {
-        m_networkManager->sendCustomRequest(m_networkRequest, "DELETE");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "DELETE", buffer);
     }
+
+    buffer->setParent(reply);
+    delete swgDeviceSettings;
 }
 
 void BladeRF2Output::networkManagerFinished(QNetworkReply *reply)
@@ -1200,10 +1220,11 @@ void BladeRF2Output::networkManagerFinished(QNetworkReply *reply)
                 << " error(" << (int) replyError
                 << "): " << replyError
                 << ": " << reply->errorString();
-        return;
     }
-
-    QString answer = reply->readAll();
-    answer.chop(1); // remove last \n
-    qDebug("BladeRF2Output::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    else
+    {
+        QString answer = reply->readAll();
+        answer.chop(1); // remove last \n
+        qDebug("BladeRF2Output::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    }
 }

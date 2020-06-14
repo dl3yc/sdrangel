@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -44,7 +45,7 @@ public:
             sampleRate = m_defaultAudioSampleRate;
             volume = m_defaultAudioInputVolume;
         }
-        unsigned int sampleRate;
+        int sampleRate;
         float volume;
         friend QDataStream& operator<<(QDataStream& ds, const InputDeviceInfo& info);
         friend QDataStream& operator>>(QDataStream& ds, InputDeviceInfo& info);
@@ -73,7 +74,7 @@ public:
             udpChannelCodec = AudioOutput::UDPCodecL16;
             udpDecimationFactor = 1;
         }
-        unsigned int sampleRate;
+        int sampleRate;
         QString udpAddress;
         quint16 udpPort;
         bool copyToUDP;
@@ -113,7 +114,7 @@ public:
     void inputInfosCleanup();  //!< Remove input info from map for input devices not present
     void outputInfosCleanup(); //!< Remove output info from map for output devices not present
 
-    static const unsigned int m_defaultAudioSampleRate = 48000;
+    static const int m_defaultAudioSampleRate = 48000;
     static const float m_defaultAudioInputVolume;
     static const QString m_defaultUDPAddress;
     static const quint16 m_defaultUDPPort = 9998;
@@ -134,6 +135,9 @@ private:
     QMap<int, QList<MessageQueue*> > m_inputDeviceSourceMessageQueues; //!< sink message queues attached to device
     QMap<int, AudioInput*> m_audioInputs; //!< audio device index to audio input map (index -1 is default device)
     QMap<QString, InputDeviceInfo> m_audioInputInfos; //!< audio device name to audio input device info
+
+    bool m_defaultOutputStarted; //!< True if the default audio output (-1) has already been started
+    bool m_defaultInputStarted;  //!< True if the default audio input (-1) has already been started
 
     void resetToDefaults();
     QByteArray serialize() const;

@@ -4,6 +4,7 @@
 // This program is free som_udpCopyAudioftware; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -52,6 +53,7 @@ void DSDDemodSettings::resetToDefaults()
     m_traceStroke = 100;
     m_traceDecay = 200;
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -67,6 +69,7 @@ QByteArray DSDDemodSettings::serialize() const
     s.writeS32(3, m_demodGain*100.0);
     s.writeS32(4, m_fmDeviation/100.0);
     s.writeS32(5, m_squelch);
+    s.writeBool(6, m_pllLock);
     s.writeU32(7, m_rgbColor);
     s.writeS32(8, m_squelchGate);
     s.writeS32(9, m_volume*10.0);
@@ -97,6 +100,8 @@ QByteArray DSDDemodSettings::serialize() const
     s.writeU32(26, m_reverseAPIPort);
     s.writeU32(27, m_reverseAPIDeviceIndex);
     s.writeU32(28, m_reverseAPIChannelIndex);
+    s.writeBool(29, m_audioMute);
+    s.writeS32(30, m_streamIndex);
 
     return s.final();
 }
@@ -133,6 +138,7 @@ bool DSDDemodSettings::deserialize(const QByteArray& data)
         m_fmDeviation = tmp * 100.0;
         d.readS32(5, &tmp, -40);
         m_squelch = tmp < -100 ? tmp / 10.0 : tmp;
+        d.readBool(6, &m_pllLock, true);
         d.readU32(7, &m_rgbColor);
         d.readS32(8, &m_squelchGate, 5);
         d.readS32(9, &tmp, 20);
@@ -172,6 +178,8 @@ bool DSDDemodSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(28, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readBool(29, &m_audioMute, false);
+        d.readS32(30, &m_streamIndex, 0);
 
         return true;
     }

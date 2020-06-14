@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -22,21 +23,24 @@
 #include <QWaitCondition>
 #include <libhackrf/hackrf.h>
 
-#include "dsp/samplesourcefifo.h"
+#include "dsp/samplesourcefifodb.h"
 #include "dsp/interpolators.h"
 
 #define HACKRF_BLOCKSIZE (1<<17)
+
+class SampleSourceFifo;
 
 class HackRFOutputThread : public QThread {
 	Q_OBJECT
 
 public:
-	HackRFOutputThread(hackrf_device* dev, SampleSourceFifo* sampleFifo, QObject* parent = NULL);
+	HackRFOutputThread(hackrf_device* dev, SampleSourceFifo* sampleFifo, QObject* parent = nullptr);
 	~HackRFOutputThread();
 
 	void startWork();
 	void stopWork();
 	void setLog2Interpolation(unsigned int log2_interp);
+    void setFcPos(int fcPos);
 
 private:
 	QMutex m_startWaitMutex;
@@ -48,11 +52,13 @@ private:
 	SampleSourceFifo* m_sampleFifo;
 
 	unsigned int m_log2Interp;
+    int m_fcPos;
 
     Interpolators<qint8, SDR_TX_SAMP_SZ, 8> m_interpolators;
 
 	void run();
 	void callback(qint8* buf, qint32 len);
+    void callbackPart(qint8* buf, SampleVector& data, unsigned int iBegin, unsigned int iEnd);
 	static int tx_callback(hackrf_transfer* transfer);
 };
 

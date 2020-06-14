@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -57,6 +58,7 @@ private:
     bool m_forceSettings;
     bool m_doApplySettings;
     BladeRF2InputSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
     QTimer m_updateTimer;
     QTimer m_statusTimer;
     std::vector<int> m_gains;
@@ -67,6 +69,8 @@ private:
     MessageQueue m_inputMessageQueue;
 
     void displaySettings();
+    void displaySampleRate();
+    void displayFcTooltip();
     void sendSettings();
     void updateSampleRateAndFrequency();
     void updateFrequencyLimits();
@@ -89,10 +93,11 @@ private slots:
     void on_transverter_clicked();
     void on_startStop_toggled(bool checked);
     void on_record_toggled(bool checked);
+    void on_sampleRateMode_toggled(bool checked);
     void updateHardware();
     void updateStatus();
     void openDeviceSettingsDialog(const QPoint& p);
-
+    void openFileRecordDialog(const QPoint& p);
 };
 
 #endif /* PLUGINS_SAMPLESOURCE_BLADERF2INPUT_BLADERF2INPUTGUI_H_ */

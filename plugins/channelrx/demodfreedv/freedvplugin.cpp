@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,17 +17,18 @@
 
 #include <QtPlugin>
 
-#include "device/devicesourceapi.h"
 #include "plugin/pluginapi.h"
 #ifndef SERVER_MODE
 #include "freedvdemodgui.h"
 #endif
 #include "freedvdemod.h"
+#include "freedvdemodwebapiadapter.h"
 #include "freedvplugin.h"
 
 const PluginDescriptor FreeDVPlugin::m_pluginDescriptor = {
+    FreeDVDemod::m_channelId,
 	QString("FreeDV Demodulator"),
-	QString("4.5.0"),
+	QString("4.14.6"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -54,25 +56,29 @@ void FreeDVPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* FreeDVPlugin::createRxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSink *rxChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSink *rxChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* FreeDVPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* FreeDVPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return FreeDVDemodGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 #endif
 
-BasebandSampleSink* FreeDVPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* FreeDVPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new FreeDVDemod(deviceAPI);
 }
 
-ChannelSinkAPI* FreeDVPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* FreeDVPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new FreeDVDemod(deviceAPI);
 }
 
+ChannelWebAPIAdapter* FreeDVPlugin::createChannelWebAPIAdapter() const
+{
+	return new FreeDVDemodWebAPIAdapter();
+}

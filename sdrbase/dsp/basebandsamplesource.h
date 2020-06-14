@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,7 +21,7 @@
 
 #include <QObject>
 #include "dsp/dsptypes.h"
-#include "dsp/samplesourcefifo.h"
+#include "dsp/samplesourcefifodb.h"
 #include "export.h"
 #include "util/messagequeue.h"
 
@@ -34,44 +35,19 @@ public:
 
 	virtual void start() = 0;
 	virtual void stop() = 0;
-	virtual void pull(Sample& sample) = 0;
-    virtual void pullAudio(int nbSamples) { (void) nbSamples; }
-
-    /** direct feeding of sample source FIFO */
-	void feed(SampleSourceFifo* sampleFifo, int nbSamples)
-	{
-	    SampleVector::iterator writeAt;
-	    sampleFifo->getWriteIterator(writeAt);
-	    pullAudio(nbSamples); // Pre-fetch input audio samples this is mandatory to keep things running smoothly
-
-	    for (int i = 0; i < nbSamples; i++)
-	    {
-	        pull((*writeAt));
-	        sampleFifo->bumpIndex(writeAt);
-	    }
-	}
-
-	SampleSourceFifo& getSampleSourceFifo() { return m_sampleFifo; }
-
+	virtual void pull(SampleVector::iterator& begin, unsigned int nbSamples) = 0;
 	virtual bool handleMessage(const Message& cmd) = 0; //!< Processing of a message. Returns true if message has actually been processed
 
 	MessageQueue *getInputMessageQueue() { return &m_inputMessageQueue; } //!< Get the queue for asynchronous inbound communication
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     MessageQueue *getMessageQueueToGUI() { return m_guiMessageQueue; }
-    void setDeviceSampleSourceFifo(SampleSourceFifo *deviceSampleFifo);
 
 protected:
 	MessageQueue m_inputMessageQueue;     //!< Queue for asynchronous inbound communication
     MessageQueue *m_guiMessageQueue;      //!< Input message queue to the GUI
-	SampleSourceFifo m_sampleFifo;        //!< Internal FIFO for multi-channel processing
-	SampleSourceFifo *m_deviceSampleFifo; //!< Reference to the device FIFO for single channel processing
-
-	void handleWriteToFifo(SampleSourceFifo *sampleFifo, int nbSamples);
 
 protected slots:
 	void handleInputMessages();
-	void handleWriteToFifo(int nbSamples);
-    void handleWriteToDeviceFifo(int nbSamples);
 };
 
 #endif /* SDRBASE_DSP_BASEBANDSAMPLESOURCE_H_ */

@@ -9,6 +9,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -754,10 +755,42 @@ public:
         doInterpolateFIR(x2, y2);
     }
 
+    void myInterpolateInf(qint32 *x1, qint32 *y1, qint32 *x2, qint32 *y2, qint32 *x3, qint32 *y3, qint32 *x4, qint32 *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = *y1;
+        *y1 = -x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = -*y3;
+        *y3 = x;
+    }
+
+    void myInterpolateSup(qint32 *x1, qint32 *y1, qint32 *x2, qint32 *y2, qint32 *x3, qint32 *y3, qint32 *x4, qint32 *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = -*y1;
+        *y1 = x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = *y3;
+        *y3 = -x;
+    }
+
 protected:
     EOStorageType m_even[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder];
     EOStorageType m_odd[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder];
-    int32_t m_samples[HBFIRFilterTraits<HBFilterOrder>::hbOrder][2];
+    EOStorageType m_samples[HBFIRFilterTraits<HBFilterOrder>::hbOrder][2];
 
     int m_ptr;
     int m_size;
@@ -816,13 +849,13 @@ protected:
         {
             if ((m_ptr % 2) == 0)
             {
-                iAcc += (m_even[0][a] + m_even[0][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-                qAcc += (m_even[1][a] + m_even[1][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                iAcc += ((EOStorageType)(m_even[0][a] + m_even[0][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                qAcc += ((EOStorageType)(m_even[1][a] + m_even[1][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             }
             else
             {
-                iAcc += (m_odd[0][a] + m_odd[0][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-                qAcc += (m_odd[1][a] + m_odd[1][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                iAcc += ((EOStorageType)(m_odd[0][a] + m_odd[0][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                qAcc += ((EOStorageType)(m_odd[1][a] + m_odd[1][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             }
 
             a -= 1;
@@ -831,13 +864,13 @@ protected:
 
         if ((m_ptr % 2) == 0)
         {
-            iAcc += ((int32_t)m_odd[0][m_ptr/2 + m_size/2]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
-            qAcc += ((int32_t)m_odd[1][m_ptr/2 + m_size/2]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            iAcc += m_odd[0][m_ptr/2 + m_size/2] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            qAcc += m_odd[1][m_ptr/2 + m_size/2] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
         }
         else
         {
-            iAcc += ((int32_t)m_even[0][m_ptr/2 + m_size/2 + 1]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
-            qAcc += ((int32_t)m_even[1][m_ptr/2 + m_size/2 + 1]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            iAcc += m_even[0][m_ptr/2 + m_size/2 + 1] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            qAcc += m_even[1][m_ptr/2 + m_size/2 + 1] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
         }
 
         sample->setReal(iAcc >> (HBFIRFilterTraits<HBFilterOrder>::hbShift -1));
@@ -856,13 +889,13 @@ protected:
         {
             if ((m_ptr % 2) == 0)
             {
-                iAcc += (m_even[0][a] + m_even[0][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-                qAcc += (m_even[1][a] + m_even[1][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                iAcc += ((EOStorageType)(m_even[0][a] + m_even[0][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                qAcc += ((EOStorageType)(m_even[1][a] + m_even[1][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             }
             else
             {
-                iAcc += (m_odd[0][a] + m_odd[0][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-                qAcc += (m_odd[1][a] + m_odd[1][b]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                iAcc += ((EOStorageType)(m_odd[0][a] + m_odd[0][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+                qAcc += ((EOStorageType)(m_odd[1][a] + m_odd[1][b])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             }
 
             a -= 1;
@@ -871,13 +904,13 @@ protected:
 
         if ((m_ptr % 2) == 0)
         {
-            iAcc += ((int32_t)m_odd[0][m_ptr/2 + m_size/2]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
-            qAcc += ((int32_t)m_odd[1][m_ptr/2 + m_size/2]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            iAcc += m_odd[0][m_ptr/2 + m_size/2] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            qAcc += m_odd[1][m_ptr/2 + m_size/2] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
         }
         else
         {
-            iAcc += ((int32_t)m_even[0][m_ptr/2 + m_size/2 + 1]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
-            qAcc += ((int32_t)m_even[1][m_ptr/2 + m_size/2 + 1]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            iAcc += m_even[0][m_ptr/2 + m_size/2 + 1] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
+            qAcc += m_even[1][m_ptr/2 + m_size/2 + 1] << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);
         }
 
         *x = iAcc >> (HBFIRFilterTraits<HBFilterOrder>::hbShift -1); // HB_SHIFT incorrect do not loose the gained bit
@@ -895,8 +928,8 @@ protected:
         // go through samples in buffer
         for (int i = 0; i < HBFIRFilterTraits<HBFilterOrder>::hbOrder / 4; i++)
         {
-            iAcc += (m_samples[a][0] + m_samples[b][0]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-            qAcc += (m_samples[a][1] + m_samples[b][1]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+            iAcc += ((EOStorageType)(m_samples[a][0] + m_samples[b][0])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+            qAcc += ((EOStorageType)(m_samples[a][1] + m_samples[b][1])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             a++;
             b--;
         }
@@ -916,8 +949,8 @@ protected:
         // go through samples in buffer
         for (int i = 0; i < HBFIRFilterTraits<HBFilterOrder>::hbOrder / 4; i++)
         {
-            iAcc += (m_samples[a][0] + m_samples[b][0]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
-            qAcc += (m_samples[a][1] + m_samples[b][1]) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+            iAcc += ((EOStorageType)(m_samples[a][0] + m_samples[b][0])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
+            qAcc += ((EOStorageType)(m_samples[a][1] + m_samples[b][1])) * HBFIRFilterTraits<HBFilterOrder>::hbCoeffs[i];
             a++;
             b--;
         }

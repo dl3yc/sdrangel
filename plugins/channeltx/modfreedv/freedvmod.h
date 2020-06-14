@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,28 +26,23 @@
 #include <QNetworkRequest>
 
 #include "dsp/basebandsamplesource.h"
-#include "channel/channelsourceapi.h"
 #include "dsp/basebandsamplesink.h"
-#include "dsp/ncof.h"
-#include "dsp/interpolator.h"
-#include "util/movingaverage.h"
-#include "dsp/agc.h"
-#include "dsp/fftfilt.h"
-#include "dsp/cwkeyer.h"
-#include "audio/audiofifo.h"
-#include "audio/audioresampler.h"
+#include "dsp/spectrumvis.h"
+#include "channel/channelapi.h"
 #include "util/message.h"
 
 #include "freedvmodsettings.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSinkAPI;
-class ThreadedBasebandSampleSource;
-class UpChannelizer;
+class QThread;
+class DeviceAPI;
+class CWKeyer;
+class FreeDVModBaseband;
+
 struct freedv;
 
-class FreeDVMod : public BasebandSampleSource, public ChannelSourceAPI {
+class FreeDVMod : public BasebandSampleSource, public ChannelAPI {
     Q_OBJECT
 
 public:
@@ -70,29 +66,6 @@ public:
             Message(),
             m_settings(settings),
             m_force(force)
-        { }
-    };
-
-    class MsgConfigureChannelizer : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        int getSampleRate() const { return m_sampleRate; }
-        int getCenterFrequency() const { return m_centerFrequency; }
-
-        static MsgConfigureChannelizer* create(int sampleRate, int centerFrequency)
-        {
-            return new MsgConfigureChannelizer(sampleRate, centerFrequency);
-        }
-
-    private:
-        int m_sampleRate;
-        int  m_centerFrequency;
-
-        MsgConfigureChannelizer(int sampleRate, int centerFrequency) :
-            Message(),
-            m_sampleRate(sampleRate),
-            m_centerFrequency(centerFrequency)
         { }
     };
 
@@ -203,16 +176,13 @@ public:
 
     //=================================================================
 
-    FreeDVMod(DeviceSinkAPI *deviceAPI);
+    FreeDVMod(DeviceAPI *deviceAPI);
     ~FreeDVMod();
     virtual void destroy() { delete this; }
 
-    void setSpectrumSampleSink(BasebandSampleSink* sampleSink) { m_sampleSink = sampleSink; }
-
-    virtual void pull(Sample& sample);
-    virtual void pullAudio(int nbSamples);
     virtual void start();
     virtual void stop();
+    virtual void pull(SampleVector::iterator& begin, unsigned int nbSamples);
     virtual bool handleMessage(const Message& cmd);
 
     virtual void getIdentifier(QString& id) { id = objectName(); }
@@ -221,6 +191,16 @@ public:
 
     virtual QByteArray serialize() const;
     virtual bool deserialize(const QByteArray& data);
+
+    virtual int getNbSinkStreams() const { return 1; }
+    virtual int getNbSourceStreams() const { return 0; }
+
+    virtual qint64 getStreamCenterFrequency(int streamIndex, bool sinkElseSource) const
+    {
+        (void) streamIndex;
+        (void) sinkElseSource;
+        return m_settings.m_inputFrequencyOffset;
+    }
 
     virtual int webapiSettingsGet(
                 SWGSDRangel::SWGChannelSettings& response,
@@ -236,26 +216,27 @@ public:
                 SWGSDRangel::SWGChannelReport& response,
                 QString& errorMessage);
 
-    uint32_t getAudioSampleRate() const { return m_audioSampleRate; }
-    uint32_t getModemSampleRate() const { return m_modemSampleRate; }
-    double getMagSq() const { return m_magsq; }
-    Real getLowCutoff() const { return m_lowCutoff; }
-    Real getHiCutoff() const { return m_hiCutoff; }
+    static void webapiFormatChannelSettings(
+        SWGSDRangel::SWGChannelSettings& response,
+        const FreeDVModSettings& settings);
 
-    CWKeyer *getCWKeyer() { return &m_cwKeyer; }
+    static void webapiUpdateChannelSettings(
+            FreeDVModSettings& settings,
+            const QStringList& channelSettingsKeys,
+            SWGSDRangel::SWGChannelSettings& response);
+
+    SpectrumVis *getSpectrumVis() { return &m_spectrumVis; }
+    uint32_t getAudioSampleRate() const;
+    uint32_t getModemSampleRate() const;
+    Real getLowCutoff() const;
+    Real getHiCutoff() const;
+    double getMagSq() const;
+    CWKeyer *getCWKeyer();
+    void setLevelMeter(QObject *levelMeter);
+    uint32_t getNumberOfDeviceStreams() const;
 
     static const QString m_channelIdURI;
     static const QString m_channelId;
-
-signals:
-	/**
-	 * Level changed
-	 * \param rmsLevel RMS level in range 0.0 - 1.0
-	 * \param peakLevel Peak level in range 0.0 - 1.0
-	 * \param numSamples Number of audio samples analyzed
-	 */
-	void levelChanged(qreal rmsLevel, qreal peakLevel, int numSamples);
-
 
 private:
     enum RateState {
@@ -263,84 +244,27 @@ private:
         RSRunning
     };
 
-    DeviceSinkAPI* m_deviceAPI;
-    ThreadedBasebandSampleSource* m_threadedChannelizer;
-    UpChannelizer* m_channelizer;
-
-    int m_basebandSampleRate;
-    int m_outputSampleRate;
-    int m_modemSampleRate;
-    int m_inputFrequencyOffset;
-    Real m_lowCutoff;
-    Real m_hiCutoff;
+    DeviceAPI* m_deviceAPI;
+    QThread *m_thread;
+    FreeDVModBaseband* m_basebandSource;
     FreeDVModSettings m_settings;
-    quint32 m_audioSampleRate;
+    SpectrumVis m_spectrumVis;
 
-    NCOF m_carrierNco;
-    NCOF m_toneNco;
-    Complex m_modSample;
-    Interpolator m_interpolator;
-    Real m_interpolatorDistance;
-    Real m_interpolatorDistanceRemain;
-    bool m_interpolatorConsumed;
-	fftfilt* m_SSBFilter;
-	Complex* m_SSBFilterBuffer;
-	int m_SSBFilterBufferIndex;
-	static const int m_ssbFftLen;
-
-	BasebandSampleSink* m_sampleSink;
 	SampleVector m_sampleBuffer;
-
-    fftfilt::cmplx m_sum;
-    int m_undersampleCount;
-    int m_sumCount;
-
-    double m_magsq;
-    MovingAverageUtil<double, double, 16> m_movingAverage;
-
-    AudioVector m_audioBuffer;
-    uint m_audioBufferFill;
-
-    AudioFifo m_audioFifo;
     QMutex m_settingsMutex;
 
     std::ifstream m_ifstream;
     QString m_fileName;
     quint64 m_fileSize;     //!< raw file size (bytes)
     quint32 m_recordLength; //!< record length in seconds computed from file size
-    int m_inputSampleRate;  //!< speech (input) sample rate (fixed 8000 S/s)
-
-    quint32 m_levelCalcCount;
-    Real m_peakLevel;
-    Real m_levelSum;
-    CWKeyer m_cwKeyer;
+    int m_fileSampleRate;  //!< speech (input) sample rate (fixed 8000 S/s)
 
     QNetworkAccessManager *m_networkManager;
     QNetworkRequest m_networkRequest;
 
-    struct freedv *m_freeDV;
-    int m_nSpeechSamples;
-    int m_nNomModemSamples;
-    int m_iSpeech;
-    int m_iModem;
-    int16_t *m_speechIn;
-    int16_t *m_modOut;
-    float m_scaleFactor; //!< divide by this amount to scale from int16 to float in [-1.0, 1.0] interval
-    AudioResampler m_audioResampler;
-
-    static const int m_levelNbSamples;
-
-    void applyAudioSampleRate(int sampleRate);
-    void applyChannelSettings(int basebandSampleRate, int outputSampleRate, int inputFrequencyOffset, bool force = false);
     void applySettings(const FreeDVModSettings& settings, bool force = false);
-    void applyFreeDVMode(FreeDVModSettings::FreeDVMode mode);
-    void pullAF(Complex& sample);
-    void calculateLevel(Complex& sample);
-    void calculateLevel(qint16& sample);
-    void modulateSample();
     void openFileStream();
     void seekFileStream(int seekPercentage);
-    void webapiFormatChannelSettings(SWGSDRangel::SWGChannelSettings& response, const FreeDVModSettings& settings);
     void webapiFormatChannelReport(SWGSDRangel::SWGChannelReport& response);
     void webapiReverseSendSettings(QList<QString>& channelSettingsKeys, const FreeDVModSettings& settings, bool force);
     void webapiReverseSendCWSettings(const CWKeyerSettings& settings);

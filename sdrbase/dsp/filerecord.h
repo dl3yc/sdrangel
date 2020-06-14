@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -49,7 +50,7 @@ public:
     quint64 getByteCount() const { return m_byteCount; }
 
     void setFileName(const QString& filename);
-    void genUniqueFileName(uint deviceUID);
+    void genUniqueFileName(uint deviceUID, int istream = -1);
 
 	virtual void feed(const SampleVector::const_iterator& begin, const SampleVector::const_iterator& end, bool positiveOnly);
 	virtual void start();
@@ -57,6 +58,7 @@ public:
 	virtual bool handleMessage(const Message& message);
     void startRecording();
     void stopRecording();
+    bool isRecording() const { return m_recordOn; }
     static bool readHeader(std::ifstream& samplefile, Header& header); //!< returns true if CRC checksum is correct else false
     static void writeHeader(std::ofstream& samplefile, Header& header);
 

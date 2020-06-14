@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,11 +18,38 @@
 
 #include "dsp/fftwindow.h"
 
+FFTWindow::FFTWindow() :
+	m_kaiserAlpha(M_PI) // first sidelobe at < -70dB
+{
+	m_kaiserI0Alpha = zeroethOrderBessel(m_kaiserAlpha);
+}
+
+void FFTWindow::setKaiserAlpha(Real alpha)
+{
+	m_kaiserAlpha = alpha;
+	m_kaiserI0Alpha = zeroethOrderBessel(m_kaiserAlpha);
+}
+
+void FFTWindow::setKaiserBeta(Real beta)
+{
+	m_kaiserAlpha = beta / M_PI;
+	m_kaiserI0Alpha = zeroethOrderBessel(m_kaiserAlpha);
+}
+
 void FFTWindow::create(Function function, int n)
 {
 	Real (*wFunc)(Real n, Real i);
 
 	m_window.clear();
+
+	if (function == Kaiser) // Kaiser special case
+	{
+		for(int i = 0; i < n; i++) {
+			m_window.push_back(kaiser(n, i));
+		}
+
+		return;
+	}
 
 	switch(function) {
 		case Flattop:
@@ -50,24 +78,43 @@ void FFTWindow::create(Function function, int n)
 			break;
 	}
 
-	for(int i = 0; i < n; i++)
+	for(int i = 0; i < n; i++) {
 		m_window.push_back(wFunc(n, i));
+	}
 }
 
 void FFTWindow::apply(const std::vector<Real>& in, std::vector<Real>* out)
 {
-	for(size_t i = 0; i < m_window.size(); i++)
+	for(size_t i = 0; i < m_window.size(); i++) {
 		(*out)[i] = in[i] * m_window[i];
+    }
 }
 
 void FFTWindow::apply(const std::vector<Complex>& in, std::vector<Complex>* out)
 {
-	for(size_t i = 0; i < m_window.size(); i++)
+	for(size_t i = 0; i < m_window.size(); i++) {
 		(*out)[i] = in[i] * m_window[i];
+    }
+}
+
+void FFTWindow::apply(std::vector<Complex>& in)
+{
+	for(size_t i = 0; i < m_window.size(); i++) {
+		in[i] *= m_window[i];
+    }
 }
 
 void FFTWindow::apply(const Complex* in, Complex* out)
 {
-	for(size_t i = 0; i < m_window.size(); i++)
+	for(size_t i = 0; i < m_window.size(); i++) {
 		out[i] = in[i] * m_window[i];
+    }
 }
+
+void FFTWindow::apply(Complex* in)
+{
+	for(size_t i = 0; i < m_window.size(); i++) {
+		in[i] *= m_window[i];
+    }
+}
+

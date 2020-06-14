@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -39,8 +40,9 @@ void HackRFInputSettings::resetToDefaults()
 	m_dcBlock = false;
 	m_iqCorrection = false;
 	m_devSampleRate = 2400000;
-	m_linkTxFrequency = false;
 	m_fileRecordName = "";
+    m_transverterMode = false;
+	m_transverterDeltaFrequency = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -62,11 +64,12 @@ QByteArray HackRFInputSettings::serialize() const
 	s.writeBool(10, m_dcBlock);
 	s.writeBool(11, m_iqCorrection);
 	s.writeU64(12, m_devSampleRate);
-    s.writeBool(13, m_linkTxFrequency);
     s.writeBool(14, m_useReverseAPI);
     s.writeString(15, m_reverseAPIAddress);
     s.writeU32(16, m_reverseAPIPort);
     s.writeU32(17, m_reverseAPIDeviceIndex);
+    s.writeBool(18, m_transverterMode);
+    s.writeS64(19, m_transverterDeltaFrequency);
 
 	return s.final();
 }
@@ -98,7 +101,6 @@ bool HackRFInputSettings::deserialize(const QByteArray& data)
 		d.readBool(10, &m_dcBlock, false);
 		d.readBool(11, &m_iqCorrection, false);
 		d.readU64(12, &m_devSampleRate, 2400000U);
-        d.readBool(13, &m_linkTxFrequency, false);
         d.readBool(14, &m_useReverseAPI, false);
         d.readString(15, &m_reverseAPIAddress, "127.0.0.1");
         d.readU32(16, &uintval, 0);
@@ -111,6 +113,8 @@ bool HackRFInputSettings::deserialize(const QByteArray& data)
 
         d.readU32(17, &uintval, 0);
         m_reverseAPIDeviceIndex = uintval > 99 ? 99 : uintval;
+        d.readBool(18, &m_transverterMode, false);
+        d.readS64(19, &m_transverterDeltaFrequency, 0);
 
 		return true;
 	}

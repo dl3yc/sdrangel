@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -26,7 +27,7 @@
 #include "rtlsdrsettings.h"
 #include <rtl-sdr.h>
 
-class DeviceSourceAPI;
+class DeviceAPI;
 class RTLSDRThread;
 class FileRecord;
 class QNetworkAccessManager;
@@ -96,7 +97,7 @@ public:
         { }
     };
 
-	RTLSDRInput(DeviceSourceAPI *deviceAPI);
+	RTLSDRInput(DeviceAPI *deviceAPI);
 	virtual ~RTLSDRInput();
 	virtual void destroy();
 
@@ -110,6 +111,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -129,6 +131,11 @@ public:
             SWGSDRangel::SWGDeviceReport& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
     virtual int webapiRunGet(
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
@@ -137,6 +144,15 @@ public:
             bool run,
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
+
+	static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const RTLSDRSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            RTLSDRSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
 
 	const std::vector<int>& getGains() const { return m_gains; }
 	void set_ds_mode(int on);
@@ -151,7 +167,7 @@ public:
     static const int sampleRateHighRangeMax;
 
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
     FileRecord *m_fileSink; //!< File sink to record device I/Q output
 	QMutex m_mutex;
 	RTLSDRSettings m_settings;
@@ -166,7 +182,6 @@ private:
 	bool openDevice();
 	void closeDevice();
 	bool applySettings(const RTLSDRSettings& settings, bool force);
-	void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const RTLSDRSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const RTLSDRSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

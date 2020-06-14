@@ -1,16 +1,18 @@
 #include "ssbplugin.h"
 
-#include <device/devicesourceapi.h>
 #include <QtPlugin>
 #include "plugin/pluginapi.h"
 #ifndef SERVER_MODE
 #include "ssbdemodgui.h"
 #endif
 #include "ssbdemod.h"
+#include "ssbdemodwebapiadapter.h"
+#include "ssbplugin.h"
 
 const PluginDescriptor SSBPlugin::m_pluginDescriptor = {
+    SSBDemod::m_channelId,
 	QString("SSB Demodulator"),
-	QString("4.5.0"),
+	QString("4.14.6"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -38,25 +40,29 @@ void SSBPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* SSBPlugin::createRxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSink *rxChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSink *rxChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* SSBPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* SSBPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return SSBDemodGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 #endif
 
-BasebandSampleSink* SSBPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* SSBPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new SSBDemod(deviceAPI);
 }
 
-ChannelSinkAPI* SSBPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* SSBPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new SSBDemod(deviceAPI);
 }
 
+ChannelWebAPIAdapter* SSBPlugin::createChannelWebAPIAdapter() const
+{
+	return new SSBDemodWebAPIAdapter();
+}

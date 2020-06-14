@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,6 +17,4 @@
 
 #include "../bladerf1/devicebladerf1shared.h"
 
-const float  DeviceBladeRF1Shared::m_sampleFifoLengthInSeconds = 0.25;
-const int    DeviceBladeRF1Shared::m_sampleFifoMinSize = 75000; // 300 kS/s knee
-const int    DeviceBladeRF1Shared::m_sampleFifoMinSize32 = 150000; // Fixed for interpolation by 32
+const unsigned int DeviceBladeRF1Shared::m_sampleFifoMinRate = 48000;

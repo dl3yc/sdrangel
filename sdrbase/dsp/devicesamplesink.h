@@ -1,10 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2016 F4EXB                                                      //
+// Copyright (C) 2016-2019 F4EXB                                                 //
 // written by Edouard Griffiths                                                  //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,11 +31,18 @@ namespace SWGSDRangel
     class SWGDeviceSettings;
     class SWGDeviceState;
     class SWGDeviceReport;
+    class SWGDeviceActions;
 }
 
 class SDRBASE_API DeviceSampleSink : public QObject {
 	Q_OBJECT
 public:
+    typedef enum {
+        FC_POS_INFRA = 0,
+        FC_POS_SUPRA,
+        FC_POS_CENTER
+    } fcPos_t;
+
 	DeviceSampleSink();
 	virtual ~DeviceSampleSink();
 	virtual void destroy() = 0;
@@ -48,6 +56,7 @@ public:
 
 	virtual const QString& getDeviceDescription() const = 0;
 	virtual int getSampleRate() const = 0; //!< Sample rate exposed by the sink
+    virtual void setSampleRate(int sampleRate) = 0; //!< For when the sink sample rate is set externally
 	virtual quint64 getCenterFrequency() const = 0; //!< Center frequency exposed by the sink
     virtual void setCenterFrequency(qint64 centerFrequency) = 0;
 
@@ -103,10 +112,42 @@ public:
         return 501;
     }
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage)
+    {
+        (void) deviceActionsKeys;
+        (void) actions;
+        errorMessage = "Not implemented";
+        return 501;
+    }
+
 	MessageQueue *getInputMessageQueue() { return &m_inputMessageQueue; }
     virtual void setMessageQueueToGUI(MessageQueue *queue) = 0; // pure virtual so that child classes must have to deal with this
     MessageQueue *getMessageQueueToGUI() { return m_guiMessageQueue; }
 	SampleSourceFifo* getSampleFifo() { return &m_sampleSourceFifo; }
+
+    static qint64 calculateDeviceCenterFrequency(
+            quint64 centerFrequency,
+            qint64 transverterDeltaFrequency,
+            int log2Interp,
+            fcPos_t fcPos,
+            quint32 devSampleRate,
+            bool transverterMode = false);
+
+    static qint64 calculateCenterFrequency(
+            quint64 deviceCenterFrequency,
+            qint64 transverterDeltaFrequency,
+            int log2Interp,
+            fcPos_t fcPos,
+            quint32 devSampleRate,
+            bool transverterMode = false);
+
+    static qint32 calculateFrequencyShift(
+            int log2Interp,
+            fcPos_t fcPos,
+            quint32 devSampleRate);
 
 protected slots:
 	void handleInputMessages();

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,11 +22,13 @@
 #include "remotesourcegui.h"
 #endif
 #include "remotesource.h"
+#include "remotesourcewebapiadapter.h"
 #include "remotesourceplugin.h"
 
 const PluginDescriptor RemoteSourcePlugin::m_pluginDescriptor = {
+    RemoteSource::m_channelId,
     QString("Remote channel source"),
-    QString("4.4.2"),
+    QString("4.12.3"),
     QString("(c) Edouard Griffiths, F4EXB"),
     QString("https://github.com/f4exb/sdrangel"),
     true,
@@ -53,27 +56,29 @@ void RemoteSourcePlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* RemoteSourcePlugin::createTxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSource *txChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSource *txChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* RemoteSourcePlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel)
+PluginInstanceGUI* RemoteSourcePlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const
 {
     return RemoteSourceGUI::create(m_pluginAPI, deviceUISet, txChannel);
 }
 #endif
 
-BasebandSampleSource* RemoteSourcePlugin::createTxChannelBS(DeviceSinkAPI *deviceAPI)
+BasebandSampleSource* RemoteSourcePlugin::createTxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new RemoteSource(deviceAPI);
 }
 
-ChannelSourceAPI* RemoteSourcePlugin::createTxChannelCS(DeviceSinkAPI *deviceAPI)
+ChannelAPI* RemoteSourcePlugin::createTxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new RemoteSource(deviceAPI);
 }
 
-
-
+ChannelWebAPIAdapter* RemoteSourcePlugin::createChannelWebAPIAdapter() const
+{
+	return new RemoteSourceWebAPIAdapter();
+}

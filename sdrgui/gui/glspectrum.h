@@ -8,6 +8,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -27,7 +28,7 @@
 #include <QOpenGLVertexArrayObject>
 #include <QMatrix4x4>
 #include <QGLWidget>
-#include "dsp/dsptypes.h"
+#include "dsp/glspectruminterface.h"
 #include "gui/scaleengine.h"
 #include "gui/glshadersimple.h"
 #include "gui/glshadertextured.h"
@@ -39,7 +40,7 @@
 class QOpenGLShaderProgram;
 class MessageQueue;
 
-class SDRGUI_API GLSpectrum : public QGLWidget {
+class SDRGUI_API GLSpectrum : public QGLWidget, public GLSpectrumInterface {
 	Q_OBJECT
 
 public:
@@ -60,8 +61,8 @@ public:
         quint32 m_sampleRate;
     };
 
-	GLSpectrum(QWidget* parent = NULL);
-	~GLSpectrum();
+	GLSpectrum(QWidget* parent = nullptr);
+	virtual ~GLSpectrum();
 
 	void setCenterFrequency(qint64 frequency);
 	void setSampleRate(qint32 sampleRate);
@@ -88,12 +89,18 @@ public:
 	void removeChannelMarker(ChannelMarker* channelMarker);
 	void setMessageQueueToGUI(MessageQueue* messageQueue) { m_messageQueueToGUI = messageQueue; }
 
-	void newSpectrum(const std::vector<Real>& spectrum, int fftSize);
+	virtual void newSpectrum(const std::vector<Real>& spectrum, int fftSize);
 	void clearSpectrumHistogram();
 
 	Real getWaterfallShare() const { return m_waterfallShare; }
 	void setWaterfallShare(Real waterfallShare);
 	void connectTimer(const QTimer& timer);
+
+    void setDisplayedStream(bool sourceOrSink, int streamIndex)
+    {
+        m_displaySourceOrSink = sourceOrSink;
+        m_displayStreamIndex = streamIndex;
+    }
 
 private:
 	struct ChannelMarkerState {
@@ -150,6 +157,7 @@ private:
 
 	Real m_waterfallShare;
 
+    int m_leftMargin;
 	QPixmap m_leftMarginPixmap;
 	QPixmap m_frequencyPixmap;
 	ScaleEngine m_timeScale;
@@ -178,8 +186,9 @@ private:
 	QMatrix4x4 m_glHistogramSpectrumMatrix;
 	QMatrix4x4 m_glHistogramBoxMatrix;
 	bool m_displayHistogram;
-
 	bool m_displayChanged;
+    bool m_displaySourceOrSink;
+    int m_displayStreamIndex;
 
 	GLShaderSimple m_glShaderSimple;
 	GLShaderTextured m_glShaderLeftScale;
@@ -210,6 +219,7 @@ private:
 	void mouseMoveEvent(QMouseEvent* event);
 	void mousePressEvent(QMouseEvent* event);
 	void mouseReleaseEvent(QMouseEvent* event);
+    void wheelEvent(QWheelEvent*);
 
 	void enterEvent(QEvent* event);
 	void leaveEvent(QEvent* event);

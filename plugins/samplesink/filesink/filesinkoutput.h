@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -27,7 +28,7 @@
 #include "filesinksettings.h"
 
 class FileSinkThread;
-class DeviceSinkAPI;
+class DeviceAPI;
 
 class FileSinkOutput : public DeviceSampleSink {
 public:
@@ -170,7 +171,7 @@ public:
 		{ }
 	};
 
-	FileSinkOutput(DeviceSinkAPI *deviceAPI);
+	FileSinkOutput(DeviceAPI *deviceAPI);
 	virtual ~FileSinkOutput();
 	virtual void destroy();
 
@@ -184,6 +185,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 	std::time_t getStartingTimeStamp() const;
@@ -200,7 +202,7 @@ public:
             QString& errorMessage);
 
 private:
-    DeviceSinkAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	FileSinkSettings m_settings;
 	std::ofstream m_ofstream;

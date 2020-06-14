@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -22,7 +23,6 @@
 
 #include "ssbmodgui.h"
 
-#include "device/devicesinkapi.h"
 #include "device/deviceuiset.h"
 #include "dsp/spectrumvis.h"
 #include "ui_ssbmodgui.h"
@@ -31,9 +31,11 @@
 #include "util/db.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
+#include "dsp/cwkeyer.h"
 #include "gui/crightclickenabler.h"
 #include "gui/audioselectdialog.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "mainwindow.h"
 
 SSBModGUI* SSBModGUI::create(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx)
@@ -136,7 +138,8 @@ bool SSBModGUI::handleMessage(const Message& message)
     else if (CWKeyer::MsgConfigureCWKeyer::match(message))
     {
         const CWKeyer::MsgConfigureCWKeyer& cfg = (CWKeyer::MsgConfigureCWKeyer&) message;
-        ui->cwKeyerGUI->displaySettings(cfg.getSettings());
+        ui->cwKeyerGUI->setSettings(cfg.getSettings());
+        ui->cwKeyerGUI->displaySettings();
         return true;
     }
     else
@@ -291,46 +294,22 @@ void SSBModGUI::on_mic_toggled(bool checked)
     applySettings();
 }
 
+void SSBModGUI::on_feedbackEnable_toggled(bool checked)
+{
+    m_settings.m_feedbackAudioEnable = checked;
+    applySettings();
+}
+
+void SSBModGUI::on_feedbackVolume_valueChanged(int value)
+{
+    ui->feedbackVolumeText->setText(QString("%1").arg(value / 100.0, 0, 'f', 2));
+    m_settings.m_feedbackVolumeFactor = value / 100.0;
+    applySettings();
+}
+
 void SSBModGUI::on_agc_toggled(bool checked)
 {
     m_settings.m_agc = checked;
-    applySettings();
-}
-
-void SSBModGUI::on_agcOrder_valueChanged(int value){
-    QString s = QString::number(value / 100.0, 'f', 2);
-    ui->agcOrderText->setText(s);
-    m_settings.m_agcOrder = value / 100.0;
-    applySettings();
-}
-
-void SSBModGUI::on_agcTime_valueChanged(int value){
-    QString s = QString::number(SSBModSettings::getAGCTimeConstant(value), 'f', 0);
-    ui->agcTimeText->setText(s);
-    m_settings.m_agcTime = SSBModSettings::getAGCTimeConstant(value) * 48;
-    applySettings();
-}
-
-void SSBModGUI::on_agcThreshold_valueChanged(int value)
-{
-    m_settings.m_agcThreshold = value; // dB
-    displayAGCPowerThreshold();
-    applySettings();
-}
-
-void SSBModGUI::on_agcThresholdGate_valueChanged(int value)
-{
-    QString s = QString::number(value, 'f', 0);
-    ui->agcThresholdGateText->setText(s);
-    m_settings.m_agcThresholdGate = value * 48;
-    applySettings();
-}
-
-void SSBModGUI::on_agcThresholdDelay_valueChanged(int value)
-{
-    QString s = QString::number(value * 10, 'f', 0);
-    ui->agcThresholdDelayText->setText(s);
-    m_settings.m_agcThresholdDelay = value * 480;
     applySettings();
 }
 
@@ -377,29 +356,48 @@ void SSBModGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void SSBModGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_ssbMod->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 SSBModGUI::SSBModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx, QWidget* parent) :
@@ -421,9 +419,9 @@ SSBModGUI::SSBModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSam
 	connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
 	connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
 
-	m_spectrumVis = new SpectrumVis(SDR_TX_SCALEF, ui->glSpectrum);
 	m_ssbMod = (SSBMod*) channelTx; //new SSBMod(m_deviceUISet->m_deviceSinkAPI);
-	m_ssbMod->setSpectrumSampleSink(m_spectrumVis);
+    m_spectrumVis = m_ssbMod->getSpectrumVis();
+	m_spectrumVis->setGLSpectrum(ui->glSpectrum);
 	m_ssbMod->setMessageQueueToGUI(getInputMessageQueue());
 
     resetToDefaults();
@@ -440,6 +438,9 @@ SSBModGUI::SSBModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSam
     CRightClickEnabler *audioMuteRightClickEnabler = new CRightClickEnabler(ui->mic);
     connect(audioMuteRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(audioSelect()));
 
+    CRightClickEnabler *feedbackRightClickEnabler = new CRightClickEnabler(ui->feedbackEnable);
+    connect(feedbackRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(audioFeedbackSelect()));
+
     ui->deltaFrequencyLabel->setText(QString("%1f").arg(QChar(0x94, 0x03)));
     ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
     ui->deltaFrequency->setValueRange(false, 7, -9999999, 9999999);
@@ -450,6 +451,7 @@ SSBModGUI::SSBModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSam
 	m_channelMarker.setSidebands(ChannelMarker::usb);
 	m_channelMarker.setCenterFrequency(0);
     m_channelMarker.setTitle("SSB Modulator");
+    m_channelMarker.setSourceOrSinkStream(false);
     m_channelMarker.blockSignals(false);
 	m_channelMarker.setVisible(true);
 
@@ -461,15 +463,15 @@ SSBModGUI::SSBModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSam
 
     connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
 
-    ui->cwKeyerGUI->setBuddies(m_ssbMod->getInputMessageQueue(), m_ssbMod->getCWKeyer());
-    ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+    ui->cwKeyerGUI->setCWKeyer(m_ssbMod->getCWKeyer());
+    ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
     m_settings.setChannelMarker(&m_channelMarker);
     m_settings.setSpectrumGUI(ui->spectrumGUI);
     m_settings.setCWKeyerGUI(ui->cwKeyerGUI);
 
 	connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
-	connect(m_ssbMod, SIGNAL(levelChanged(qreal, qreal, int)), ui->volumeMeter, SLOT(levelChanged(qreal, qreal, int)));
+    m_ssbMod->setLevelMeter(ui->volumeMeter);
 
     m_iconDSBUSB.addPixmap(QPixmap("://dsb.png"), QIcon::Normal, QIcon::On);
     m_iconDSBUSB.addPixmap(QPixmap("://usb.png"), QIcon::Normal, QIcon::Off);
@@ -484,7 +486,6 @@ SSBModGUI::~SSBModGUI()
 {
     m_deviceUISet->removeTxChannelInstance(this);
 	delete m_ssbMod; // TODO: check this: when the GUI closes it has to delete the modulator
-	delete m_spectrumVis;
 	delete ui;
 }
 
@@ -499,15 +500,15 @@ void SSBModGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-		SSBMod::MsgConfigureChannelizer *msgChan = SSBMod::MsgConfigureChannelizer::create(
-		        48000, m_settings.m_inputFrequencyOffset);
-        m_ssbMod->getInputMessageQueue()->push(msgChan);
-
         SSBModSettings mod_settings; // different USB/LSB convention between modulator and GUI
         mod_settings = m_settings;
-        if (mod_settings.m_bandwidth > 0) {
+
+        if (mod_settings.m_bandwidth > 0)
+        {
             mod_settings.m_usb = true;
-        } else {
+        }
+        else
+        {
             mod_settings.m_bandwidth = -mod_settings.m_bandwidth;
             mod_settings.m_lowCutoff = -mod_settings.m_lowCutoff;
             mod_settings.m_usb = false;
@@ -649,22 +650,9 @@ void SSBModGUI::displaySettings()
 
     setTitleColor(m_settings.m_rgbColor);
     setWindowTitle(m_channelMarker.getTitle());
+    displayStreamIndex();
 
     blockApplySettings(true);
-
-    QString s = QString::number(m_settings.m_agcTime / 48, 'f', 0);
-    ui->agcTimeText->setText(s);
-    ui->agcTime->setValue(SSBModSettings::getAGCTimeConstantIndex(m_settings.m_agcTime / 48));
-    displayAGCPowerThreshold();
-    s = QString::number(m_settings.m_agcThresholdGate / 48, 'f', 0);
-    ui->agcThresholdGateText->setText(s);
-    ui->agcThresholdGate->setValue(m_settings.m_agcThresholdGate / 48);
-    s = QString::number(m_settings.m_agcThresholdDelay / 48, 'f', 0);
-    ui->agcThresholdDelayText->setText(s);
-    ui->agcThresholdDelay->setValue(m_settings.m_agcThresholdDelay / 480);
-    s = QString::number(m_settings.m_agcOrder, 'f', 2);
-    ui->agcOrderText->setText(s);
-    ui->agcOrder->setValue(roundf(m_settings.m_agcOrder * 100.0));
 
     ui->agc->setChecked(m_settings.m_agc);
     ui->audioBinaural->setChecked(m_settings.m_audioBinaural);
@@ -681,7 +669,7 @@ void SSBModGUI::displaySettings()
     ui->spanLog2->setValue(5 - m_settings.m_spanLog2);
 
     ui->BW->setValue(roundf(m_settings.m_bandwidth/100.0));
-    s = QString::number(m_settings.m_bandwidth/1000.0, 'f', 1);
+    QString s = QString::number(m_settings.m_bandwidth/1000.0, 'f', 1);
 
     if (m_settings.m_dsb)
     {
@@ -723,22 +711,20 @@ void SSBModGUI::displaySettings()
     ui->play->setChecked(m_settings.m_modAFInput == SSBModSettings::SSBModInputAF::SSBModInputFile);
     ui->morseKeyer->setChecked(m_settings.m_modAFInput == SSBModSettings::SSBModInputAF::SSBModInputCWTone);
 
+    ui->feedbackEnable->setChecked(m_settings.m_feedbackAudioEnable);
+    ui->feedbackVolume->setValue(roundf(m_settings.m_feedbackVolumeFactor * 100.0));
+    ui->feedbackVolumeText->setText(QString("%1").arg(m_settings.m_feedbackVolumeFactor, 0, 'f', 2));
+
     blockApplySettings(false);
 }
 
-void SSBModGUI::displayAGCPowerThreshold()
+void SSBModGUI::displayStreamIndex()
 {
-    if (m_settings.m_agcThreshold == -99)
-    {
-        ui->agcThresholdText->setText("---");
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
     }
-    else
-    {
-        QString s = QString::number(m_settings.m_agcThreshold, 'f', 0);
-        ui->agcThresholdText->setText(s);
-    }
-
-    ui->agcThreshold->setValue(m_settings.m_agcThreshold);
 }
 
 void SSBModGUI::leaveEvent(QEvent*)
@@ -760,6 +746,19 @@ void SSBModGUI::audioSelect()
     if (audioSelect.m_selected)
     {
         m_settings.m_audioDeviceName = audioSelect.m_audioDeviceName;
+        applySettings();
+    }
+}
+
+void SSBModGUI::audioFeedbackSelect()
+{
+    qDebug("SSBModGUI::audioFeedbackSelect");
+    AudioSelectDialog audioSelect(DSPEngine::instance()->getAudioDeviceManager(), m_settings.m_audioDeviceName, false); // false for output
+    audioSelect.exec();
+
+    if (audioSelect.m_selected)
+    {
+        m_settings.m_feedbackAudioDeviceName = audioSelect.m_audioDeviceName;
         applySettings();
     }
 }

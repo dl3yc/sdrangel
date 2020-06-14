@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,8 +24,7 @@ MESSAGE_CLASS_DEFINITION(DeviceXTRXShared::MsgReportBuddyChange, Message)
 MESSAGE_CLASS_DEFINITION(DeviceXTRXShared::MsgReportClockSourceChange, Message)
 MESSAGE_CLASS_DEFINITION(DeviceXTRXShared::MsgReportDeviceInfo, Message)
 
-const float  DeviceXTRXShared::m_sampleFifoLengthInSeconds = 0.25;
-const int    DeviceXTRXShared::m_sampleFifoMinSize = 48000; // 192kS/s knee
+const unsigned int DeviceXTRXShared::m_sampleFifoMinRate = 48000;
 
 DeviceXTRXShared::DeviceXTRXShared() :
     m_dev(0),

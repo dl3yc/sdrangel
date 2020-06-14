@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,7 +26,7 @@ class DEVICES_API DevicePlutoSDRBox;
 
 /**
  * This structure refers to one physical device shared among parties (logical devices represented by
- * the DeviceSinkAPI or DeviceSourceAPI).
+ * the DeviceAPI with single Rx or Tx stream type).
  * It allows storing information on the common resources in one place and is shared among participants.
  * There is only one copy that is constructed by the first participant and destroyed by the last.
  * A participant knows it is the first or last by checking the lists of buddies (Rx + Tx).
@@ -37,6 +38,7 @@ public:
     ~DevicePlutoSDRParams();
 
     bool open(const std::string& serial);
+    bool openURI(const std::string& uri);
     void close();
 
     DevicePlutoSDRBox *getBox() { return m_box; }

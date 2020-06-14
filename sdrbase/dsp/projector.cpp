@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -69,7 +70,22 @@ Real Projector::run(const Sample& s)
         }
             break;
         case ProjectionPhase:
-            v = std::atan2((float) s.m_imag, (float) s.m_real) / M_PI;
+            v = std::atan2((float) s.m_imag, (float) s.m_real) / M_PI; // normalize
+            break;
+        case ProjectionDOAP:
+        {
+            // calculate phase. Assume phase difference between two sources at half wavelength distance with sources axis as reference (positive side)
+            // cos(theta) = phi / 2*pi*k
+            Real p = std::atan2((float) s.m_imag, (float) s.m_real); // do not mormalize phi (phi in -pi..+pi)
+            v = acos(p/M_PI) / M_PI; // normalize theta
+        }
+            break;
+        case ProjectionDOAN:
+        {
+            // calculate phase. Assume phase difference between two sources at half wavelength distance with sources axis as reference (negative source)
+            Real p = std::atan2((float) s.m_imag, (float) s.m_real); // do not mormalize phi (phi in -pi..+pi)
+            v = -acos(p/M_PI) / M_PI; // normalize theta
+        }
             break;
         case ProjectionDPhase:
         {
@@ -210,5 +226,3 @@ Real Projector::normalizeAngle(Real angle)
     }
     return angle;
 }
-
-

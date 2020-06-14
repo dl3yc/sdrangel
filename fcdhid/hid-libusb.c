@@ -46,7 +46,7 @@
 #include <wchar.h>
 
 /* GNU / LibUSB */
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 #include "iconv.h"
 
 #include "../fcdhid/hidapi.h"
@@ -69,9 +69,7 @@ extern "C" {
  * MacOS does not implement POSIX Thread Barriers
  */
 #ifdef __APPLE__
-
-#include "../apple/apple_compat.h"
-
+#include "apple_compat.h"
 #endif
 
 /* Uncomment to enable the retrieval of Usage and Usage Page in

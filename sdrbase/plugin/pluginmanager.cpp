@@ -1,9 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2016 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2016-2019 Edouard Griffiths, F4EXB                              //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,14 +17,12 @@
 
 #include <QCoreApplication>
 #include <QPluginLoader>
-//#include <QComboBox>
 #include <QDebug>
 
 #include <cstdio>
+#include <algorithm>
 
 #include <plugin/plugininstancegui.h>
-#include "device/devicesourceapi.h"
-#include "device/devicesinkapi.h"
 #include "device/deviceenumerator.h"
 #include "settings/preset.h"
 #include "util/message.h"
@@ -32,11 +31,15 @@
 
 #include "plugin/pluginmanager.h"
 
+const QString PluginManager::m_localInputHardwareID = "LocalInput";
+const QString PluginManager::m_localInputDeviceTypeID = "sdrangel.samplesource.localinput";
 const QString PluginManager::m_remoteInputHardwareID = "RemoteInput";
 const QString PluginManager::m_remoteInputDeviceTypeID = "sdrangel.samplesource.remoteinput";
-const QString PluginManager::m_fileSourceHardwareID = "FileSource";
-const QString PluginManager::m_fileSourceDeviceTypeID = "sdrangel.samplesource.filesource";
+const QString PluginManager::m_fileInputHardwareID = "FileInput";
+const QString PluginManager::m_fileInputDeviceTypeID = "sdrangel.samplesource.fileinput";
 
+const QString PluginManager::m_localOutputHardwareID = "LocalOutput";
+const QString PluginManager::m_localOutputDeviceTypeID = "sdrangel.samplesource.localoutput";
 const QString PluginManager::m_remoteOutputHardwareID = "RemoteOutput";
 const QString PluginManager::m_remoteOutputDeviceTypeID = "sdrangel.samplesink.remoteoutput";
 const QString PluginManager::m_fileSinkHardwareID = "FileSink";
@@ -50,7 +53,7 @@ PluginManager::PluginManager(QObject* parent) :
 
 PluginManager::~PluginManager()
 {
-//	freeAll();
+  //  freeAll();
 }
 
 void PluginManager::loadPlugins(const QString& pluginsSubDir)
@@ -62,24 +65,45 @@ void PluginManager::loadPlugins(const QString& pluginsSubDir)
 void PluginManager::loadPluginsPart(const QString& pluginsSubDir)
 {
     QString applicationDirPath = QCoreApplication::instance()->applicationDirPath();
-    QString applicationLibPath = applicationDirPath + "/../lib/" + pluginsSubDir;
+    QStringList PluginsPath;
+
+    // NOTE: not the best solution but for now this is
+    // on make install [PREFIX]/bin and [PREFIX]/lib/sdrangel
+    PluginsPath << applicationDirPath + "/../lib/sdrangel/" + pluginsSubDir;
+    // on build
+    PluginsPath << applicationDirPath + "/lib/" + pluginsSubDir;
 #ifdef __APPLE__
-    applicationLibPath.clear();
-    applicationLibPath.append(applicationDirPath + "/../Frameworks/" + pluginsSubDir);
+    // on SDRAngel.app
+    PluginsPath << applicationDirPath + "/../Resources/lib/" + pluginsSubDir;
+#elif defined(_WIN32) || defined(WIN32)
+    PluginsPath << applicationDirPath + "/" + pluginsSubDir;
 #endif
-    QString applicationBuildPath = applicationDirPath + "/" + pluginsSubDir;
-    qDebug() << "PluginManager::loadPlugins: " << qPrintable(applicationLibPath) << "," << qPrintable(applicationBuildPath);
 
-    QDir pluginsLibDir = QDir(applicationLibPath);
-    QDir pluginsBuildDir = QDir(applicationBuildPath);
+    // NOTE: exit on the first folder found
+    bool found = false;
+    foreach (QString dir, PluginsPath)
+    {
+        QDir d(dir);
+        if (d.entryList(QDir::Files).count() == 0) {
+            qDebug("PluginManager::loadPluginsPart folder %s is empty", qPrintable(dir));
+            continue;
+        }
 
-    loadPluginsDir(pluginsLibDir);
-    loadPluginsDir(pluginsBuildDir);
+        found = true;
+        loadPluginsDir(d);
+        break;
+    }
+
+    if (!found)
+    {
+        qCritical("No plugins found. Exit immediately.");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void PluginManager::loadPluginsFinal()
 {
-    qSort(m_plugins);
+    std::sort(m_plugins.begin(), m_plugins.end());
 
     for (Plugins::const_iterator it = m_plugins.begin(); it != m_plugins.end(); ++it)
     {
@@ -88,6 +112,12 @@ void PluginManager::loadPluginsFinal()
 
     DeviceEnumerator::instance()->enumerateRxDevices(this);
     DeviceEnumerator::instance()->enumerateTxDevices(this);
+    DeviceEnumerator::instance()->enumerateMIMODevices(this);
+}
+
+void PluginManager::loadPluginsNonDiscoverable(const DeviceUserArgs& deviceUserArgs)
+{
+    DeviceEnumerator::instance()->addNonDiscoverableDevices(this, deviceUserArgs);
 }
 
 void PluginManager::registerRxChannel(const QString& channelIdURI, const QString& channelId, PluginInterface* plugin)
@@ -108,72 +138,96 @@ void PluginManager::registerTxChannel(const QString& channelIdURI, const QString
 	m_txChannelRegistrations.append(PluginAPI::ChannelRegistration(channelIdURI, channelId, plugin));
 }
 
+void PluginManager::registerMIMOChannel(const QString& channelIdURI, const QString& channelId, PluginInterface* plugin)
+{
+    qDebug() << "PluginManager::registerMIMOChannel "
+            << plugin->getPluginDescriptor().displayedName.toStdString().c_str()
+            << " with channel name " << channelIdURI;
+
+	m_mimoChannelRegistrations.append(PluginAPI::ChannelRegistration(channelIdURI, channelId, plugin));
+}
+
 void PluginManager::registerSampleSource(const QString& sourceName, PluginInterface* plugin)
 {
 	qDebug() << "PluginManager::registerSampleSource "
 			<< plugin->getPluginDescriptor().displayedName.toStdString().c_str()
-			<< " with source name " << sourceName.toStdString().c_str();
+			<< " with source name " << sourceName.toStdString().c_str()
+            << " and hardware id " << plugin->getPluginDescriptor().hardwareId;
 
-	m_sampleSourceRegistrations.append(PluginAPI::SamplingDeviceRegistration(sourceName, plugin));
+	m_sampleSourceRegistrations.append(PluginAPI::SamplingDeviceRegistration(
+        plugin->getPluginDescriptor().hardwareId,
+        sourceName,
+        plugin
+    ));
 }
 
 void PluginManager::registerSampleSink(const QString& sinkName, PluginInterface* plugin)
 {
 	qDebug() << "PluginManager::registerSampleSink "
 			<< plugin->getPluginDescriptor().displayedName.toStdString().c_str()
-			<< " with sink name " << sinkName.toStdString().c_str();
+			<< " with sink name " << sinkName.toStdString().c_str()
+            << " and hardware id " << plugin->getPluginDescriptor().hardwareId;
 
-	m_sampleSinkRegistrations.append(PluginAPI::SamplingDeviceRegistration(sinkName, plugin));
+	m_sampleSinkRegistrations.append(PluginAPI::SamplingDeviceRegistration(
+        plugin->getPluginDescriptor().hardwareId,
+        sinkName,
+        plugin
+    ));
+}
+
+void PluginManager::registerSampleMIMO(const QString& mimoName, PluginInterface* plugin)
+{
+	qDebug() << "PluginManager::registerSampleMIMO "
+			<< plugin->getPluginDescriptor().displayedName.toStdString().c_str()
+			<< " with MIMO name " << mimoName.toStdString().c_str()
+            << " and hardware id " << plugin->getPluginDescriptor().hardwareId;
+
+	m_sampleMIMORegistrations.append(PluginAPI::SamplingDeviceRegistration(
+        plugin->getPluginDescriptor().hardwareId,
+        mimoName,
+        plugin
+    ));
 }
 
 void PluginManager::loadPluginsDir(const QDir& dir)
 {
-	QDir pluginsDir(dir);
+    QDir pluginsDir(dir);
 
-	foreach (QString fileName, pluginsDir.entryList(QDir::Files))
-	{
-        if (fileName.endsWith(".so") || fileName.endsWith(".dll") || fileName.endsWith(".dylib"))
-		{
-			qDebug() << "PluginManager::loadPluginsDir: fileName: " << qPrintable(fileName);
+    foreach (QString fileName, pluginsDir.entryList(QDir::Files))
+    {
+        if (QLibrary::isLibrary(fileName))
+        {
+            qDebug("PluginManager::loadPluginsDir: fileName: %s", qPrintable(fileName));
 
-			QPluginLoader* loader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName));
-			PluginInterface* plugin = qobject_cast<PluginInterface*>(loader->instance());
+            QPluginLoader* pluginLoader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName));
+            if (!pluginLoader->load())
+            {
+                qWarning("PluginManager::loadPluginsDir: %s", qPrintable(pluginLoader->errorString()));
+                delete pluginLoader;
+                continue;
+            }
 
-			if (loader->isLoaded())
-			{
-				qInfo("PluginManager::loadPluginsDir: loaded plugin %s", qPrintable(fileName));
-			}
-			else
-			{
-				qWarning() << "PluginManager::loadPluginsDir: " << qPrintable(loader->errorString());
-			}
+            PluginInterface* instance = qobject_cast<PluginInterface*>(pluginLoader->instance());
+            if (instance == nullptr)
+            {
+                qWarning("PluginManager::loadPluginsDir: Unable to get main instance of plugin: %s", qPrintable(fileName) );
+                delete pluginLoader;
+                continue;
+            }
 
-			if (plugin != 0)
-			{
-				m_plugins.append(Plugin(fileName, loader, plugin));
-			}
-			else
-			{
-				loader->unload();
-			}
+            delete(pluginLoader);
 
-			delete loader; // Valgrind memcheck
-		}
-	}
-
-	// recursive calls on subdirectories
-
-	foreach (QString dirName, pluginsDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot))
-	{
-		loadPluginsDir(pluginsDir.absoluteFilePath(dirName));
-	}
+            qInfo("PluginManager::loadPluginsDir: loaded plugin %s", qPrintable(fileName));
+            m_plugins.append(Plugin(fileName, instance));
+       }
+    }
 }
 
 void PluginManager::listTxChannels(QList<QString>& list)
 {
     list.clear();
 
-    for(PluginAPI::ChannelRegistrations::iterator it = m_txChannelRegistrations.begin(); it != m_txChannelRegistrations.end(); ++it)
+    for (PluginAPI::ChannelRegistrations::iterator it = m_txChannelRegistrations.begin(); it != m_txChannelRegistrations.end(); ++it)
     {
         const PluginDescriptor& pluginDescipror = it->m_plugin->getPluginDescriptor();
         list.append(pluginDescipror.displayedName);
@@ -184,14 +238,25 @@ void PluginManager::listRxChannels(QList<QString>& list)
 {
     list.clear();
 
-    for(PluginAPI::ChannelRegistrations::iterator it = m_rxChannelRegistrations.begin(); it != m_rxChannelRegistrations.end(); ++it)
+    for (PluginAPI::ChannelRegistrations::iterator it = m_rxChannelRegistrations.begin(); it != m_rxChannelRegistrations.end(); ++it)
     {
         const PluginDescriptor& pluginDesciptor = it->m_plugin->getPluginDescriptor();
         list.append(pluginDesciptor.displayedName);
     }
 }
 
-void PluginManager::createRxChannelInstance(int channelPluginIndex, DeviceUISet *deviceUISet, DeviceSourceAPI *deviceAPI)
+void PluginManager::listMIMOChannels(QList<QString>& list)
+{
+    list.clear();
+
+    for (PluginAPI::ChannelRegistrations::iterator it = m_mimoChannelRegistrations.begin(); it != m_mimoChannelRegistrations.end(); ++it)
+    {
+        const PluginDescriptor& pluginDesciptor = it->m_plugin->getPluginDescriptor();
+        list.append(pluginDesciptor.displayedName);
+    }
+}
+
+void PluginManager::createRxChannelInstance(int channelPluginIndex, DeviceUISet *deviceUISet, DeviceAPI *deviceAPI)
 {
     if (channelPluginIndex < m_rxChannelRegistrations.size())
     {
@@ -201,7 +266,7 @@ void PluginManager::createRxChannelInstance(int channelPluginIndex, DeviceUISet 
     }
 }
 
-void PluginManager::createTxChannelInstance(int channelPluginIndex, DeviceUISet *deviceUISet, DeviceSinkAPI *deviceAPI)
+void PluginManager::createTxChannelInstance(int channelPluginIndex, DeviceUISet *deviceUISet, DeviceAPI *deviceAPI)
 {
     if (channelPluginIndex < m_txChannelRegistrations.size())
     {
@@ -209,4 +274,59 @@ void PluginManager::createTxChannelInstance(int channelPluginIndex, DeviceUISet 
         BasebandSampleSource *txChannel = pluginInterface->createTxChannelBS(deviceAPI);
         pluginInterface->createTxChannelGUI(deviceUISet, txChannel);
     }
+}
+
+void PluginManager::createMIMOChannelInstance(int channelPluginIndex, DeviceUISet *deviceUISet, DeviceAPI *deviceAPI)
+{
+    if (channelPluginIndex < m_mimoChannelRegistrations.size())
+    {
+        PluginInterface *pluginInterface = m_mimoChannelRegistrations[channelPluginIndex].m_plugin;
+        MIMOChannel *mimoChannel = pluginInterface->createMIMOChannelBS(deviceAPI);
+        pluginInterface->createMIMOChannelGUI(deviceUISet, mimoChannel);
+    }
+}
+
+const PluginInterface *PluginManager::getChannelPluginInterface(const QString& channelIdURI) const
+{
+    for (PluginAPI::ChannelRegistrations::const_iterator it = m_rxChannelRegistrations.begin(); it != m_rxChannelRegistrations.end(); ++it)
+    {
+        if (it->m_channelIdURI == channelIdURI) {
+            return it->m_plugin;
+        }
+    }
+
+    for (PluginAPI::ChannelRegistrations::const_iterator it = m_txChannelRegistrations.begin(); it != m_txChannelRegistrations.end(); ++it)
+    {
+        if (it->m_channelIdURI == channelIdURI) {
+            return it->m_plugin;
+        }
+    }
+
+    return nullptr;
+}
+
+const PluginInterface *PluginManager::getDevicePluginInterface(const QString& deviceId) const
+{
+    for (PluginAPI::SamplingDeviceRegistrations::const_iterator it = m_sampleSourceRegistrations.begin(); it != m_sampleSourceRegistrations.end(); ++it)
+    {
+        if (it->m_deviceId == deviceId) {
+            return it->m_plugin;
+        }
+    }
+
+    for (PluginAPI::SamplingDeviceRegistrations::const_iterator it = m_sampleSinkRegistrations.begin(); it != m_sampleSinkRegistrations.end(); ++it)
+    {
+        if (it->m_deviceId == deviceId) {
+            return it->m_plugin;
+        }
+    }
+
+    for (PluginAPI::SamplingDeviceRegistrations::const_iterator it = m_sampleMIMORegistrations.begin(); it != m_sampleMIMORegistrations.end(); ++it)
+    {
+        if (it->m_deviceId == deviceId) {
+            return it->m_plugin;
+        }
+    }
+
+    return nullptr;
 }

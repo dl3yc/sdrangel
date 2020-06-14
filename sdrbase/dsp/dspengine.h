@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -26,12 +27,12 @@
 #include "audio/audiooutput.h"
 #include "audio/audioinput.h"
 #include "export.h"
-#ifdef DSD_USE_SERIALDV
-#include "dsp/dvserialengine.h"
-#endif
+#include "ambe/ambeengine.h"
 
 class DSPDeviceSourceEngine;
 class DSPDeviceSinkEngine;
+class DSPDeviceMIMOEngine;
+class FFTFactory;
 
 class SDRBASE_API DSPEngine : public QObject {
 	Q_OBJECT
@@ -49,13 +50,23 @@ public:
 	DSPDeviceSinkEngine *addDeviceSinkEngine();
 	void removeLastDeviceSinkEngine();
 
-	AudioDeviceManager *getAudioDeviceManager() { return &m_audioDeviceManager; }
+	DSPDeviceMIMOEngine *addDeviceMIMOEngine();
+	void removeLastDeviceMIMOEngine();
 
+	AudioDeviceManager *getAudioDeviceManager() { return &m_audioDeviceManager; }
+	AMBEEngine *getAMBEEngine() { return &m_ambeEngine; }
+
+    uint32_t getDeviceSourceEnginesNumber() const { return m_deviceSourceEngines.size(); }
     DSPDeviceSourceEngine *getDeviceSourceEngineByIndex(uint deviceIndex) { return m_deviceSourceEngines[deviceIndex]; }
     DSPDeviceSourceEngine *getDeviceSourceEngineByUID(uint uid);
 
+    uint32_t getDeviceSinkEnginesNumber() const { return m_deviceSinkEngines.size(); }
     DSPDeviceSinkEngine *getDeviceSinkEngineByIndex(uint deviceIndex) { return m_deviceSinkEngines[deviceIndex]; }
     DSPDeviceSinkEngine *getDeviceSinkEngineByUID(uint uid);
+
+    uint32_t getDeviceMIMOEnginesNumber() const { return m_deviceMIMOEngines.size(); }
+    DSPDeviceMIMOEngine *getDeviceMIMOEngineByIndex(uint deviceIndex) { return m_deviceMIMOEngines[deviceIndex]; }
+    DSPDeviceMIMOEngine *getDeviceMIMOEngineByUID(uint uid);
 
 	// Serial DV methods:
 
@@ -72,20 +83,27 @@ public:
 	        AudioFifo *audioFifo);
 
     const QTimer& getMasterTimer() const { return m_masterTimer; }
+    void setMIMOSupport(bool mimoSupport) { m_mimoSupport = mimoSupport; }
+    bool getMIMOSupport() const { return m_mimoSupport; }
+    void createFFTFactory(const QString& fftWisdomFileName);
+    void preAllocateFFTs();
+    FFTFactory *getFFTFactory() { return m_fftFactory; }
 
 private:
 	std::vector<DSPDeviceSourceEngine*> m_deviceSourceEngines;
 	uint m_deviceSourceEnginesUIDSequence;
 	std::vector<DSPDeviceSinkEngine*> m_deviceSinkEngines;
 	uint m_deviceSinkEnginesUIDSequence;
+	std::vector<DSPDeviceMIMOEngine*> m_deviceMIMOEngines;
+	uint m_deviceMIMOEnginesUIDSequence;
     AudioDeviceManager m_audioDeviceManager;
     int m_audioInputDeviceIndex;
     int m_audioOutputDeviceIndex;
     QTimer m_masterTimer;
 	bool m_dvSerialSupport;
-#ifdef DSD_USE_SERIALDV
-	DVSerialEngine m_dvSerialEngine;
-#endif
+    bool m_mimoSupport;
+	AMBEEngine m_ambeEngine;
+    FFTFactory *m_fftFactory;
 };
 
 #endif // INCLUDE_DSPENGINE_H

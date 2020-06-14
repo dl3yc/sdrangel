@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,7 +21,6 @@
 #include <QSysInfo>
 
 #include <signal.h>
-#include <unistd.h>
 #include <vector>
 
 #include "loggerwithfile.h"
@@ -32,6 +32,7 @@ void handler(int sig) {
     QCoreApplication::quit();
 }
 
+#ifndef _WIN32
 void catchUnixSignals(const std::vector<int>& quitSignals) {
     sigset_t blocking_mask;
     sigemptyset(&blocking_mask);
@@ -49,6 +50,7 @@ void catchUnixSignals(const std::vector<int>& quitSignals) {
         sigaction(*it, &sa, 0);
     }
 }
+#endif
 
 static int runQtApplication(int argc, char* argv[], qtwebapp::LoggerWithFile *logger)
 {
@@ -56,52 +58,52 @@ static int runQtApplication(int argc, char* argv[], qtwebapp::LoggerWithFile *lo
 
     QCoreApplication::setOrganizationName("f4exb");
     QCoreApplication::setApplicationName("SDRangelSrv");
-    QCoreApplication::setApplicationVersion("4.5.0");
+    QCoreApplication::setApplicationVersion(SDRANGEL_VERSION);
 
+#ifndef _WIN32
     int catchSignals[] = {SIGQUIT, SIGINT, SIGTERM, SIGHUP};
     std::vector<int> vsig(catchSignals, catchSignals + sizeof(catchSignals) / sizeof(int));
     catchUnixSignals(vsig);
+#endif
 
     MainParser parser;
     parser.parse(a);
 
 #if QT_VERSION >= 0x050400
     qInfo("%s %s Qt %s %db %s %s DSP Rx:%db Tx:%db PID %lld",
-            qPrintable(QCoreApplication::applicationName()),
-            qPrintable(QCoreApplication::applicationVersion()),
-            qPrintable(QString(QT_VERSION_STR)),
-            QT_POINTER_SIZE*8,
-            qPrintable(QSysInfo::currentCpuArchitecture()),
-            qPrintable(QSysInfo::prettyProductName()),
-            SDR_RX_SAMP_SZ,
-            SDR_TX_SAMP_SZ,
-            QCoreApplication::applicationPid());
+          qPrintable(QCoreApplication::applicationName()),
+          qPrintable(QCoreApplication::applicationVersion()),
+          qPrintable(QString(QT_VERSION_STR)),
+          QT_POINTER_SIZE*8,
+          qPrintable(QSysInfo::currentCpuArchitecture()),
+          qPrintable(QSysInfo::prettyProductName()),
+          SDR_RX_SAMP_SZ,
+          SDR_TX_SAMP_SZ,
+          QCoreApplication::applicationPid());
 #else
     qInfo("%s %s Qt %s %db DSP Rx:%db Tx:%db PID %lld",
-            qPrintable(QCoreApplication::applicationName()),
-            qPrintable((QCoreApplication::>applicationVersion()),
-            qPrintable(QString(QT_VERSION_STR)),
-            QT_POINTER_SIZE*8,
-            SDR_RX_SAMP_SZ,
-            SDR_TX_SAMP_SZ,
-            QCoreApplication::applicationPid());
+          qPrintable(QCoreApplication::applicationName()),
+          qPrintable((QCoreApplication::>applicationVersion()),
+                     qPrintable(QString(QT_VERSION_STR)),
+                     QT_POINTER_SIZE*8,
+                     SDR_RX_SAMP_SZ,
+                     SDR_TX_SAMP_SZ,
+                     QCoreApplication::applicationPid());
 #endif
 
-    MainCore m(logger, parser, &a);
+          MainCore m(logger, parser, &a);
 
-    // This will cause the application to exit when the main core is finished
-    QObject::connect(&m, SIGNAL(finished()), &a, SLOT(quit()));
+          // This will cause the application to exit when the main core is finished
+          QObject::connect(&m, SIGNAL(finished()), &a, SLOT(quit()));
 
-    return a.exec();
-}
+          return a.exec();
+          }
 
-int main(int argc, char* argv[])
-{
-    qtwebapp::LoggerWithFile *logger = new qtwebapp::LoggerWithFile(qApp);
-    logger->installMsgHandler();
-    int res = runQtApplication(argc, argv, logger);
-    qWarning("SDRangel quit.");
-    return res;
-}
-
-
+      int main(int argc, char* argv[])
+      {
+        qtwebapp::LoggerWithFile *logger = new qtwebapp::LoggerWithFile(qApp);
+        logger->installMsgHandler();
+        int res = runQtApplication(argc, argv, logger);
+        qWarning("SDRangel quit.");
+        return res;
+      }

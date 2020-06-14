@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,16 +22,14 @@
 #include "amdemodgui.h"
 #include "amdemodssbdialog.h"
 
-#include "device/devicesourceapi.h"
 #include "device/deviceuiset.h"
-#include "dsp/downchannelizer.h"
 #include "dsp/dspengine.h"
-#include "dsp/threadedbasebandsamplesink.h"
 #include "ui_amdemodgui.h"
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
 #include "util/db.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "dsp/dspengine.h"
 #include "mainwindow.h"
 #include "gui/crightclickenabler.h"
@@ -205,28 +204,47 @@ void AMDemodGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void AMDemodGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
-    dialog.move(p);
-    dialog.exec();
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_amDemod->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 AMDemodGUI::AMDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel, QWidget* parent) :
@@ -305,11 +323,6 @@ void AMDemodGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-		AMDemod::MsgConfigureChannelizer* channelConfigMsg = AMDemod::MsgConfigureChannelizer::create(
-		        m_amDemod->getAudioSampleRate(), m_channelMarker.getCenterFrequency());
-		m_amDemod->getInputMessageQueue()->push(channelConfigMsg);
-
-
 	    AMDemod::MsgConfigureAMDemod* message = AMDemod::MsgConfigureAMDemod::create( m_settings, force);
 	    m_amDemod->getInputMessageQueue()->push(message);
 	}
@@ -374,7 +387,18 @@ void AMDemodGUI::displaySettings()
         ui->ssb->setIcon(m_iconDSBUSB);
     }
 
+    displayStreamIndex();
+
     blockApplySettings(false);
+}
+
+void AMDemodGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void AMDemodGUI::leaveEvent(QEvent*)

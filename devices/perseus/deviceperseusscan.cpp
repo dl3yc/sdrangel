@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,27 +21,32 @@
 #include <QtGlobal>
 
 
-void DevicePerseusScan::scan(int nbDevices)
+bool DevicePerseusScan::scan(int nbDevices)
 {
-	if (nbDevices == 0) {
+	if (nbDevices == 0)
+    {
 		qInfo("DevicePerseusScan::scan: no Perseus devices");
-		return;
+		return true;
 	}
 
+        bool done = true;
 	perseus_descr *descr;
 	eeprom_prodid prodid;
 
 	for (int deviceIndex = 0; deviceIndex < nbDevices; deviceIndex++)
 	{
-		if ((descr = perseus_open(deviceIndex)) == 0) {
-			qCritical("DevicePerseusScan::scan: open error: %s", perseus_errorstr());
-			perseus_close(descr);
-			continue;
-		}
-
-        if (perseus_firmware_download(descr, 0) < 0) {
-            qCritical("DevicePerseusScan::scan: firmware download error: %s", perseus_errorstr());
+        if ((descr = perseus_open(deviceIndex)) == 0)
+        {
+            qCritical("DevicePerseusScan::scan: device #%d open error: %s", deviceIndex, perseus_errorstr());
             perseus_close(descr);
+            continue;
+        }
+
+        if (perseus_firmware_download(descr, 0) < 0)
+        {
+            qCritical("DevicePerseusScan::scan: device #%d firmware download error: %s", deviceIndex, perseus_errorstr());
+            perseus_close(descr);
+            done = false;
             continue;
         }
         else
@@ -48,8 +54,9 @@ void DevicePerseusScan::scan(int nbDevices)
             qInfo("DevicePerseusScan::scan: device #%d firmware downloaded", deviceIndex);
         }
 
-		if (perseus_get_product_id(descr,&prodid) < 0) {
-			qCritical("DevicePerseusScan::scan: get product id error: %s", perseus_errorstr());
+		if (perseus_get_product_id(descr,&prodid) < 0)
+        {
+			qCritical("DevicePerseusScan::scan: device #%d get product id error: %s", deviceIndex, perseus_errorstr());
 			perseus_close(descr);
 			continue;
 		}
@@ -65,6 +72,14 @@ void DevicePerseusScan::scan(int nbDevices)
 			perseus_close(descr);
 		}
 	}
+
+    return done;
+}
+
+void DevicePerseusScan::clear()
+{
+    m_scans.clear();
+    m_serialMap.clear();
 }
 
 const std::string* DevicePerseusScan::getSerialAt(unsigned int index) const

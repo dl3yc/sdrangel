@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -22,11 +23,13 @@
 #include "udpsinkgui.h"
 #endif
 #include "udpsink.h"
+#include "udpsinkwebapiadapter.h"
 #include "udpsinkplugin.h"
 
 const PluginDescriptor UDPSinkPlugin::m_pluginDescriptor = {
+    UDPSink::m_channelId,
 	QString("UDP Channel Sink"),
-	QString("4.3.2"),
+	QString("4.14.6"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -54,25 +57,29 @@ void UDPSinkPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* UDPSinkPlugin::createRxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSink *rxChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSink *rxChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* UDPSinkPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* UDPSinkPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return UDPSinkGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 #endif
 
-BasebandSampleSink* UDPSinkPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* UDPSinkPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new UDPSink(deviceAPI);
 }
 
-ChannelSinkAPI* UDPSinkPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* UDPSinkPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new UDPSink(deviceAPI);
 }
 
+ChannelWebAPIAdapter* UDPSinkPlugin::createChannelWebAPIAdapter() const
+{
+	return new UDPSinkWebAPIAdapter();
+}

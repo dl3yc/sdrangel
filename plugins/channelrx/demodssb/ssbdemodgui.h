@@ -70,10 +70,12 @@ private:
 
     bool blockApplySettings(bool block);
 	void applySettings(bool force = false);
-	void applyBandwidths(int spanLog2, bool force = false);
+	void applyBandwidths(unsigned int spanLog2, bool force = false);
+    unsigned int spanLog2Max();
 	void displaySettings();
-
+    void displayStreamIndex();
 	void displayAGCPowerThreshold(int value);
+    void displayAGCThresholdGate(int value);
 
 	void leaveEvent(QEvent*);
 	void enterEvent(QEvent*);

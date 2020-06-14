@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -49,6 +50,7 @@ void WFMModSettings::resetToDefaults()
     m_title = "WFM Modulator";
     m_modAFInput = WFMModInputNone;
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -70,6 +72,8 @@ QByteArray WFMModSettings::serialize() const
 
     if (m_cwKeyerGUI) {
         s.writeBlob(8, m_cwKeyerGUI->serialize());
+    } else { // standalone operation with presets
+        s.writeBlob(6, m_cwKeyerSettings.serialize());
     }
 
     if (m_channelMarker) {
@@ -84,6 +88,7 @@ QByteArray WFMModSettings::serialize() const
     s.writeU32(15, m_reverseAPIPort);
     s.writeU32(16, m_reverseAPIDeviceIndex);
     s.writeU32(17, m_reverseAPIChannelIndex);
+    s.writeS32(18, m_streamIndex);
 
     return s.final();
 }
@@ -112,10 +117,12 @@ bool WFMModSettings::deserialize(const QByteArray& data)
         d.readU32(5, &m_rgbColor);
         d.readReal(6, &m_toneFrequency, 1000.0);
         d.readReal(7, &m_volumeFactor, 1.0);
+        d.readBlob(8, &bytetmp);
 
         if (m_cwKeyerGUI) {
-            d.readBlob(8, &bytetmp);
             m_cwKeyerGUI->deserialize(bytetmp);
+        } else { // standalone operation with presets
+            m_cwKeyerSettings.deserialize(bytetmp);
         }
 
         if (m_channelMarker) {
@@ -147,6 +154,7 @@ bool WFMModSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(17, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readS32(18, &m_streamIndex, 0);
 
         return true;
     }

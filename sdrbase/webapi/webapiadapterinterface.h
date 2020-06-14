@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,6 +21,7 @@
 #define SDRBASE_WEBAPI_WEBAPIADAPTERINTERFACE_H_
 
 #include <QString>
+#include <QStringList>
 #include <regex>
 
 #include "SWGErrorResponse.h"
@@ -29,14 +31,20 @@
 namespace SWGSDRangel
 {
     class SWGInstanceSummaryResponse;
+    class SWGInstanceConfigResponse;
     class SWGInstanceDevicesResponse;
     class SWGInstanceChannelsResponse;
+    class SWGPreferences;
     class SWGLoggingInfo;
     class SWGAudioDevices;
     class SWGAudioInputDevice;
     class SWGAudioOutputDevice;
     class SWGLocationInformation;
-    class SWGDVSeralDevices;
+    class SWGDVSerialDevices;
+    class SWGAMBEDevices;
+    class SWGLimeRFEDevices;
+    class SWGLimeRFESettings;
+    class SWGLimeRFEPower;
     class SWGPresets;
     class SWGPresetTransfer;
     class SWGPresetIdentifier;
@@ -48,15 +56,47 @@ namespace SWGSDRangel
     class SWGDeviceSettings;
     class SWGDeviceState;
     class SWGDeviceReport;
+    class SWGDeviceActions;
     class SWGChannelsDetail;
     class SWGChannelSettings;
     class SWGChannelReport;
+    class SWGChannelActions;
     class SWGSuccessResponse;
 }
 
 class SDRBASE_API WebAPIAdapterInterface
 {
 public:
+    struct ChannelKeys
+    {
+        QStringList m_keys;
+        QStringList m_channelKeys;
+    };
+    struct DeviceKeys
+    {
+        QStringList m_keys;
+        QStringList m_deviceKeys;
+    };
+    struct PresetKeys
+    {
+        QStringList m_keys;
+        QStringList m_spectrumKeys;
+        QList<ChannelKeys> m_channelsKeys;
+        QList<DeviceKeys> m_devicesKeys;
+    };
+    struct CommandKeys
+    {
+        QStringList m_keys;
+    };
+    struct ConfigKeys
+    {
+        QStringList m_preferencesKeys;
+        PresetKeys m_workingPresetKeys;
+        QList<PresetKeys> m_presetKeys;
+        QList<CommandKeys> m_commandKeys;
+        void debug() const;
+    };
+
     virtual ~WebAPIAdapterInterface() {}
 
     /**
@@ -88,15 +128,50 @@ public:
     }
 
     /**
+     * Handler of /sdrangel/config (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceSummary
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceConfigGet(
+            SWGSDRangel::SWGInstanceConfigResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/config (PUT, PATCH) swagger/sdrangel/code/html2/index.html#api-Default-instanceSummary
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceConfigPutPatch(
+        bool force, // PUT else PATCH
+        SWGSDRangel::SWGInstanceConfigResponse& query,
+        const ConfigKeys& configKeys,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error
+    )
+    {
+        (void) force;
+        (void) query;
+        (void) configKeys;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+        return 501;
+    }
+
+    /**
      * Handler of /sdrangel/devices (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceDevices
      * returns the Http status code (default 501: not implemented)
      */
     virtual int instanceDevices(
-            bool tx,
+            int direction,
             SWGSDRangel::SWGInstanceDevicesResponse& response,
             SWGSDRangel::SWGErrorResponse& error)
     {
-        (void) tx;
+        (void) direction;
         (void) response;
     	error.init();
     	*error.getMessage() = QString("Function not implemented");
@@ -108,11 +183,11 @@ public:
      * returns the Http status code (default 501: not implemented)
      */
     virtual int instanceChannels(
-            bool tx,
+            int direction,
             SWGSDRangel::SWGInstanceChannelsResponse& response,
             SWGSDRangel::SWGErrorResponse& error)
     {
-        (void) tx;
+        (void) direction;
         (void) response;
     	error.init();
     	*error.getMessage() = QString("Function not implemented");
@@ -280,11 +355,71 @@ public:
     }
 
     /**
-     * Handler of /sdrangel/dvserial (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * Handler of /sdrangel/ambe/serial (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
      * returns the Http status code (default 501: not implemented)
      */
-    virtual int instanceDVSerialGet(
-            SWGSDRangel::SWGDVSeralDevices& response,
+    virtual int instanceAMBESerialGet(
+            SWGSDRangel::SWGDVSerialDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) response;
+        error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/ambe/devices (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceAMBEDevicesGet(
+            SWGSDRangel::SWGAMBEDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) response;
+        error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/ambe/devices (PUT) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceAMBEDevicesPut(
+            SWGSDRangel::SWGAMBEDevices& query,
+            SWGSDRangel::SWGAMBEDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) query;
+        (void) response;
+        error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/ambe/devices (PATCH) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceAMBEDevicesPatch(
+            SWGSDRangel::SWGAMBEDevices& query,
+            SWGSDRangel::SWGAMBEDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) query;
+        (void) response;
+        error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/ambe/devices (DELETE) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceAMBEDevicesDelete(
+            SWGSDRangel::SWGSuccessResponse& response,
             SWGSDRangel::SWGErrorResponse& error)
     {
         (void) response;
@@ -294,19 +429,81 @@ public:
     }
 
     /**
-     * Handler of /sdrangel/dvserial (PUT) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * Handler of /sdrangel/limerfe/serial (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
      * returns the Http status code (default 501: not implemented)
      */
-    virtual int instanceDVSerialPatch(
-            bool dvserial,
-            SWGSDRangel::SWGDVSeralDevices& response,
+    virtual int instanceLimeRFESerialGet(
+            SWGSDRangel::SWGLimeRFEDevices& response,
             SWGSDRangel::SWGErrorResponse& error)
     {
-        (void) dvserial;
         (void) response;
-        error.init();
-        *error.getMessage() = QString("Function not implemented");
-        return 501;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/limerfe/config (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceLimeRFEConfigGet(
+            const QString& serial,
+            SWGSDRangel::SWGLimeRFESettings& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) serial;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/limerfe/config (PUT) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceLimeRFEConfigPut(
+            SWGSDRangel::SWGLimeRFESettings& query,
+            SWGSDRangel::SWGSuccessResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) query;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/limerfe/run (PUT) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceLimeRFERunPut(
+            SWGSDRangel::SWGLimeRFESettings& query,
+            SWGSDRangel::SWGSuccessResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) query;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/limerfe/power (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int instanceLimeRFEPowerGet(
+            const QString& serial,
+            SWGSDRangel::SWGLimeRFEPower& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) serial;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
     }
 
     /**
@@ -436,11 +633,11 @@ public:
      * returns the Http status code (default 501: not implemented)
      */
     virtual int instanceDeviceSetPost(
-            bool tx,
+            int direction,
             SWGSDRangel::SWGSuccessResponse& response,
             SWGSDRangel::SWGErrorResponse& error)
     {
-        (void) tx;
+        (void) direction;
         (void) response;
     	error.init();
     	*error.getMessage() = QString("Function not implemented");
@@ -564,6 +761,24 @@ public:
     }
 
     /**
+     * Handler of /sdrangel/deviceset/{devicesetIndex}/subdevice/{subsystemIndex}/run (GET) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int devicesetDeviceSubsystemRunGet(
+            int deviceSetIndex,
+            int subsystemIndex,
+            SWGSDRangel::SWGDeviceState& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) deviceSetIndex;
+        (void) subsystemIndex;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
      * Handler of /sdrangel/deviceset/{devicesetIndex}/device/run (POST) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
      * returns the Http status code (default 501: not implemented)
      */
@@ -580,6 +795,24 @@ public:
     }
 
     /**
+     * Handler of /sdrangel/deviceset/{devicesetIndex}/subdevice/{subsystemIndex}/run (POST) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int devicesetDeviceSubsystemRunPost(
+            int deviceSetIndex,
+            int subsystemIndex,
+            SWGSDRangel::SWGDeviceState& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) deviceSetIndex;
+        (void) subsystemIndex;
+        (void) response;
+    	error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
      * Handler of /sdrangel/deviceset/{devicesetIndex}/device/run (DELETE) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
      * returns the Http status code (default 501: not implemented)
      */
@@ -589,6 +822,24 @@ public:
             SWGSDRangel::SWGErrorResponse& error)
     {
         (void) deviceSetIndex;
+        (void) response;
+        error.init();
+    	*error.getMessage() = QString("Function not implemented");
+    	return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/deviceset/{devicesetIndex}/subdevice/{subsystemIndex}/run (DELETE) swagger/sdrangel/code/html2/index.html#api-Default-instanceChannels
+     * returns the Http status code (default 501: not implemented)
+     */
+    virtual int devicesetDeviceSubsystemRunDelete(
+            int deviceSetIndex,
+            int subsystemIndex,
+            SWGSDRangel::SWGDeviceState& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) deviceSetIndex;
+        (void) subsystemIndex;
         (void) response;
         error.init();
     	*error.getMessage() = QString("Function not implemented");
@@ -621,6 +872,27 @@ public:
             SWGSDRangel::SWGErrorResponse& error)
     {
         (void) deviceSetIndex;
+        (void) response;
+        error.init();
+        *error.getMessage() = QString("Function not implemented");
+        return 501;
+    }
+
+    /**
+     * Handler of /sdrangel/deviceset/{deviceSetIndex}/device/actions (POST)
+     * post action(s) on device
+     */
+    virtual int devicesetDeviceActionsPost(
+            int deviceSetIndex,
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& query,
+            SWGSDRangel::SWGSuccessResponse& response,
+            SWGSDRangel::SWGErrorResponse& error
+    )
+    {
+        (void) deviceSetIndex;
+        (void) deviceActionsKeys;
+        (void) query;
         (void) response;
         error.init();
         *error.getMessage() = QString("Function not implemented");
@@ -723,7 +995,30 @@ public:
         return 501;
     }
 
+    /**
+     * Handler of /sdrangel/deviceset/{deviceSetIndex}/channel/{channelIndex}/actions (POST)
+     * posts an action on the channel (default 501: not implemented)
+     */
+    virtual int devicesetChannelActionsPost(
+            int deviceSetIndex,
+            int channelIndex,
+            const QStringList& channelActionsKeys,
+            SWGSDRangel::SWGChannelActions& query,
+            SWGSDRangel::SWGSuccessResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+    {
+        (void) deviceSetIndex;
+        (void) channelIndex;
+        (void) channelActionsKeys;
+        (void) query;
+        (void) response;
+        error.init();
+        *error.getMessage() = QString("Function not implemented");
+        return 501;
+    }
+
     static QString instanceSummaryURL;
+    static QString instanceConfigURL;
     static QString instanceDevicesURL;
     static QString instanceChannelsURL;
     static QString instanceLoggingURL;
@@ -733,7 +1028,12 @@ public:
     static QString instanceAudioInputCleanupURL;
     static QString instanceAudioOutputCleanupURL;
     static QString instanceLocationURL;
-    static QString instanceDVSerialURL;
+    static QString instanceAMBESerialURL;
+    static QString instanceAMBEDevicesURL;
+    static QString instanceLimeRFESerialURL;
+    static QString instanceLimeRFEConfigURL;
+    static QString instanceLimeRFERunURL;
+    static QString instanceLimeRFEPowerURL;
     static QString instancePresetsURL;
     static QString instancePresetURL;
     static QString instancePresetFileURL;
@@ -744,11 +1044,14 @@ public:
     static std::regex devicesetDeviceURLRe;
     static std::regex devicesetDeviceSettingsURLRe;
     static std::regex devicesetDeviceRunURLRe;
+    static std::regex devicesetDeviceSubsystemRunURLRe;
     static std::regex devicesetDeviceReportURLRe;
+    static std::regex devicesetDeviceActionsURLRe;
     static std::regex devicesetChannelURLRe;
     static std::regex devicesetChannelIndexURLRe;
     static std::regex devicesetChannelSettingsURLRe;
     static std::regex devicesetChannelReportURLRe;
+    static std::regex devicesetChannelActionsURLRe;
     static std::regex devicesetChannelsReportURLRe;
 };
 

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -34,6 +35,7 @@ void RemoteSourceSettings::resetToDefaults()
     m_rgbColor = QColor(140, 4, 4).rgb();
     m_title = "Remote source";
     m_channelMarker = nullptr;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -53,6 +55,7 @@ QByteArray RemoteSourceSettings::serialize() const
     s.writeU32(7, m_reverseAPIPort);
     s.writeU32(8, m_reverseAPIDeviceIndex);
     s.writeU32(9, m_reverseAPIChannelIndex);
+    s.writeS32(10, m_streamIndex);
 
     return s.final();
 }
@@ -97,6 +100,8 @@ bool RemoteSourceSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = tmp > 99 ? 99 : tmp;
         d.readU32(9, &tmp, 0);
         m_reverseAPIChannelIndex = tmp > 99 ? 99 : tmp;
+        d.readS32(10, &m_streamIndex, 0);
+
         return true;
     }
     else

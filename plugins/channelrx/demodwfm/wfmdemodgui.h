@@ -59,13 +59,14 @@ private:
     void blockApplySettings(bool block);
 	void applySettings(bool force = false);
 	void displaySettings();
+	void displayStreamIndex();
 
 	void leaveEvent(QEvent*);
 	void enterEvent(QEvent*);
 
 private slots:
 	void on_deltaFrequency_changed(qint64 value);
-	void on_rfBW_currentIndexChanged(int index);
+	void on_rfBW_changed(quint64 value);
 	void on_afBW_valueChanged(int value);
 	void on_volume_valueChanged(int value);
 	void on_squelch_valueChanged(int value);

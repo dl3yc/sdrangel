@@ -7,10 +7,13 @@
 #include "wfmdemodgui.h"
 #endif
 #include "wfmdemod.h"
+#include "wfmdemodwebapiadapter.h"
+#include "wfmplugin.h"
 
 const PluginDescriptor WFMPlugin::m_pluginDescriptor = {
+    WFMDemod::m_channelId,
 	QString("WFM Demodulator"),
-	QString("4.3.2"),
+	QString("4.12.3"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -38,25 +41,29 @@ void WFMPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* WFMPlugin::createRxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSink *rxChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSink *rxChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* WFMPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* WFMPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return WFMDemodGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 #endif
 
-BasebandSampleSink* WFMPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* WFMPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new WFMDemod(deviceAPI);
 }
 
-ChannelSinkAPI* WFMPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* WFMPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new WFMDemod(deviceAPI);
 }
 
+ChannelWebAPIAdapter* WFMPlugin::createChannelWebAPIAdapter() const
+{
+	return new WFMDemodWebAPIAdapter();
+}

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -28,7 +29,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSinkAPI;
+class DeviceAPI;
 class Bladerf1OutputThread;
 
 class Bladerf1Output : public DeviceSampleSink {
@@ -93,7 +94,7 @@ public:
 		{ }
 	};
 
-	Bladerf1Output(DeviceSinkAPI *deviceAPI);
+	Bladerf1Output(DeviceAPI *deviceAPI);
 	virtual ~Bladerf1Output();
 	virtual void destroy();
 
@@ -107,6 +108,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -131,8 +133,17 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const BladeRF1OutputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            BladeRF1OutputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
 private:
-	DeviceSinkAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	BladeRF1OutputSettings m_settings;
 	struct bladerf* m_dev;
@@ -146,7 +157,6 @@ private:
     bool openDevice();
     void closeDevice();
 	bool applySettings(const BladeRF1OutputSettings& settings, bool force);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const BladeRF1OutputSettings& settings);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const BladeRF1OutputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);
 

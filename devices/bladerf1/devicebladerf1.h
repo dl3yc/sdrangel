@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,14 +18,18 @@
 #ifndef DEVICES_BLADERF_DEVICESDBLADERF_H_
 #define DEVICES_BLADERF_DEVICESDBLADERF_H_
 
+#include <QString>
+
 #include <libbladeRF.h>
 
+#include "plugin/plugininterface.h"
 #include "export.h"
 
 class DEVICES_API DeviceBladeRF1
 {
 public:
     static bool open_bladerf(struct bladerf **dev, const char *serial);
+    static void enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices);
 
 private:
     static struct bladerf *open_bladerf_from_serial(const char *serial);

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -52,6 +53,8 @@ void NFMDemodSettings::resetToDefaults()
     m_rgbColor = QColor(255, 0, 0).rgb();
     m_title = "NFM Demodulator";
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_highPass = true;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -67,6 +70,7 @@ QByteArray NFMDemodSettings::serialize() const
     s.writeS32(3, m_afBandwidth/1000.0);
     s.writeS32(4, m_volume*10.0);
     s.writeS32(5, static_cast<int>(m_squelch));
+    s.writeBool(6, m_highPass);
     s.writeU32(7, m_rgbColor);
     s.writeS32(8, m_ctcssIndex);
     s.writeBool(9, m_ctcssOn);
@@ -85,6 +89,7 @@ QByteArray NFMDemodSettings::serialize() const
     s.writeU32(18, m_reverseAPIPort);
     s.writeU32(19, m_reverseAPIDeviceIndex);
     s.writeU32(20, m_reverseAPIChannelIndex);
+    s.writeS32(21, m_streamIndex);
 
     return s.final();
 }
@@ -122,6 +127,7 @@ bool NFMDemodSettings::deserialize(const QByteArray& data)
         m_volume = tmp / 10.0;
         d.readS32(5, &tmp, -30);
         m_squelch = (tmp < -100 ? tmp/10 : tmp) * 1.0;
+        d.readBool(6, &m_highPass, true);
         d.readU32(7, &m_rgbColor, QColor(255, 0, 0).rgb());
         d.readS32(8, &m_ctcssIndex, 0);
         d.readBool(9, &m_ctcssOn, false);
@@ -144,6 +150,7 @@ bool NFMDemodSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(20, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readS32(21, &m_streamIndex, 0);
 
         return true;
     }

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,7 +21,6 @@
 #include <stdint.h>
 
 #include <QObject>
-#include <QTime>
 
 #include "plugin/plugininstancegui.h"
 #include "dsp/channelmarker.h"
@@ -61,14 +61,14 @@ private:
     DeviceUISet* m_deviceUISet;
     ChannelMarker m_channelMarker;
     RemoteSinkSettings m_settings;
-    int m_sampleRate;
+    int m_basebandSampleRate;
     quint64 m_deviceCenterFrequency; //!< Center frequency in device
+    double m_shiftFrequencyFactor; //!< Channel frequency shift factor
     bool m_doApplySettings;
 
     RemoteSink* m_remoteSink;
     MessageQueue m_inputMessageQueue;
 
-    QTime m_time;
     uint32_t m_tickCount;
 
     explicit RemoteSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel, QWidget* parent = 0);
@@ -77,13 +77,20 @@ private:
     void blockApplySettings(bool block);
     void applySettings(bool force = false);
     void displaySettings();
+    void displayStreamIndex();
+    void displayRateAndShift();
     void updateTxDelayTime();
 
     void leaveEvent(QEvent*);
     void enterEvent(QEvent*);
 
+    void applyDecimation();
+    void applyPosition();
+
 private slots:
     void handleSourceMessages();
+    void on_decimationFactor_currentIndexChanged(int index);
+    void on_position_valueChanged(int value);
     void on_dataAddress_returnPressed();
     void on_dataPort_returnPressed();
     void on_dataApplyButton_clicked(bool checked);

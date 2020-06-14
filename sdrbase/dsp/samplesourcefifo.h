@@ -1,9 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2016 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2019 Edouard Griffiths, F4EXB                                   //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -19,53 +20,64 @@
 
 #include <QObject>
 #include <QMutex>
-#include <stdint.h>
-#include <assert.h>
-#include "export.h"
 #include "dsp/dsptypes.h"
+#include "export.h"
 
 class SDRBASE_API SampleSourceFifo : public QObject {
-    Q_OBJECT
-
+	Q_OBJECT
 public:
-    SampleSourceFifo(uint32_t size);
+    SampleSourceFifo(QObject *parent = nullptr);
+    SampleSourceFifo(unsigned int size, QObject *parent = nullptr);
     ~SampleSourceFifo();
+    void resize(unsigned int size);
+    void reset();
 
-    void resize(uint32_t size);
-    uint32_t size() const { return m_size; }
-    void init();
-    /** advance read pointer for the given length and activate R/W signals */
-    void readAdvance(SampleVector::iterator& readUntil, unsigned int nbSamples);
-
-    void getReadIterator(SampleVector::iterator& readUntil); //!< get iterator past the last sample of a read advance operation (i.e. current read iterator)
-    void getWriteIterator(SampleVector::iterator& writeAt);  //!< get iterator to current item for update - write phase 1
-    void bumpIndex(SampleVector::iterator& writeAt);         //!< copy current item to second buffer and bump write index - write phase 2
-
-    void write(const Sample& sample);                        //!< write directly - phase 1 + phase 2
-
+    SampleVector& getData() { return m_data; }
+    void read(
+        unsigned int amount,
+		unsigned int& ipart1Begin, unsigned int& ipart1End, // first part offsets where to read
+		unsigned int& ipart2Begin, unsigned int& ipart2End  // second part offsets
+    );
+    void write( //!< in place write
+        unsigned int amount,
+		unsigned int& ipart1Begin, unsigned int& ipart1End, // first part offsets where to write
+		unsigned int& ipart2Begin, unsigned int& ipart2End  // second part offsets
+    );
+    unsigned int remainder()
+    {
+        QMutexLocker mutexLocker(&m_mutex);
+        return m_readCount;
+    }
     /** returns ratio of off center over buffer size with sign: negative read lags and positive read leads */
     float getRWBalance() const
     {
         int delta;
-        if (m_iw > m_ir) {
-            delta = (m_size/2) - (m_iw - m_ir);
+        if (m_writeHead > m_readHead) {
+            delta = (m_size/m_rwDivisor) - (m_writeHead - m_readHead);
         } else {
-            delta = (m_ir - m_iw) - (m_size/2);
+            delta = (m_readHead - m_writeHead) - (m_size/m_rwDivisor);
         }
         return delta / (float) m_size;
     }
+    unsigned int size() const { return m_size; }
 
-private:
-    uint32_t m_size;
-    SampleVector m_data;
-    uint32_t m_iw;
-    uint32_t m_ir;
-    bool m_init;
-    QMutex m_mutex;
+    static unsigned int getSizePolicy(unsigned int sampleRate);
+    static const unsigned int m_rwDivisor;
+    static const unsigned int m_guardDivisor;
 
 signals:
-    void dataWrite(int nbSamples); // signal data is read past a threshold and writing new samples to fill in is needed
-    void dataRead(int nbSamples);  // signal a read has been done for a number of samples
+    void dataRead();
+
+private:
+    SampleVector m_data;
+    unsigned int m_size;
+    unsigned int m_lowGuard;
+    unsigned int m_highGuard;
+    unsigned int m_midPoint;
+    unsigned int m_readHead;
+    unsigned int m_writeHead;
+    unsigned int m_readCount;
+    QMutex m_mutex;
 };
 
-#endif /* SDRBASE_DSP_SAMPLESOURCEFIFO_H_ */
+#endif // SDRBASE_DSP_SAMPLESOURCEFIFO_H_

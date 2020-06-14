@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,7 +26,7 @@
 #include <dsp/devicesamplesource.h>
 #include "testsourcesettings.h"
 
-class DeviceSourceAPI;
+class DeviceAPI;
 class TestSourceThread;
 class FileRecord;
 class QNetworkAccessManager;
@@ -95,7 +96,7 @@ public:
         { }
     };
 
-    TestSourceInput(DeviceSourceAPI *deviceAPI);
+    TestSourceInput(DeviceAPI *deviceAPI);
 	virtual ~TestSourceInput();
 	virtual void destroy();
 
@@ -109,6 +110,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -133,8 +135,22 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const TestSourceSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            TestSourceSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
     FileRecord *m_fileSink; //!< File sink to record device I/Q output
 	QMutex m_mutex;
 	TestSourceSettings m_settings;
@@ -146,7 +162,6 @@ private:
     QNetworkRequest m_networkRequest;
 
 	bool applySettings(const TestSourceSettings& settings, bool force);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const TestSourceSettings& settings);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const TestSourceSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);
 

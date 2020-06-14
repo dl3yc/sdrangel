@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,12 +17,13 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include "rtlsdrgui.h"
 
-#include <device/devicesourceapi.h>
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
-#include <dsp/filerecord.h>
+#include "dsp/filerecord.h"
 
 #include "ui_rtlsdrgui.h"
 #include "gui/colormapper.h"
@@ -39,17 +41,17 @@ RTLSDRGui::RTLSDRGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_doApplySettings(true),
 	m_forceSettings(true),
 	m_settings(),
+    m_sampleRateMode(true),
 	m_sampleSource(0),
-	m_lastEngineState(DSPDeviceSourceEngine::StNotStarted)
+	m_lastEngineState(DeviceAPI::StNotStarted)
 {
-    m_sampleSource = (RTLSDRInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_sampleSource = (RTLSDRInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
     ui->setupUi(this);
 	ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
 	updateFrequencyLimits();
 
     ui->sampleRate->setColorMapper(ColorMapper(ColorMapper::GrayGreenYellow));
-    ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateHighRangeMin, RTLSDRInput::sampleRateHighRangeMax);
 
     ui->rfBW->setColorMapper(ColorMapper(ColorMapper::GrayYellow));
     ui->rfBW->setValueRange(4, 350, 8000);
@@ -68,6 +70,9 @@ RTLSDRGui::RTLSDRGui(DeviceUISet *deviceUISet, QWidget* parent) :
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 }
 
 RTLSDRGui::~RTLSDRGui()
@@ -164,6 +169,23 @@ bool RTLSDRGui::handleMessage(const Message& message)
 
         return true;
     }
+    else if (RTLSDRInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const RTLSDRInput::MsgFileRecord& notif = (const RTLSDRInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
 	else
 	{
 		return false;
@@ -202,7 +224,7 @@ void RTLSDRGui::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
 }
 
 void RTLSDRGui::updateFrequencyLimits()
@@ -249,13 +271,66 @@ void RTLSDRGui::displayGains()
     }
 }
 
+void RTLSDRGui::displaySampleRate()
+{
+    ui->sampleRate->blockSignals(true);
+    displayFcTooltip();
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+
+        if (m_settings.m_lowSampleRate) {
+            ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateLowRangeMin, RTLSDRInput::sampleRateLowRangeMax);
+        } else {
+            ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateHighRangeMin, RTLSDRInput::sampleRateHighRangeMax);
+        }
+
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+
+        if (m_settings.m_lowSampleRate) {
+            ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateLowRangeMin/(1<<m_settings.m_log2Decim), RTLSDRInput::sampleRateLowRangeMax/(1<<m_settings.m_log2Decim));
+        } else {
+            ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateHighRangeMin/(1<<m_settings.m_log2Decim), RTLSDRInput::sampleRateHighRangeMax/(1<<m_settings.m_log2Decim));
+        }
+
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
+void RTLSDRGui::displayFcTooltip()
+{
+    int32_t fShift = DeviceSampleSource::calculateFrequencyShift(
+        m_settings.m_log2Decim,
+        (DeviceSampleSource::fcPos_t) m_settings.m_fcPos,
+        m_settings.m_devSampleRate,
+        DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD
+    );
+    ui->fcPos->setToolTip(tr("Relative position of device center frequency: %1 kHz").arg(QString::number(fShift / 1000.0f, 'g', 5)));
+}
+
 void RTLSDRGui::displaySettings()
 {
     ui->transverter->setDeltaFrequency(m_settings.m_transverterDeltaFrequency);
     ui->transverter->setDeltaFrequencyActive(m_settings.m_transverterMode);
     updateFrequencyLimits();
 	ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
-	ui->sampleRate->setValue(m_settings.m_devSampleRate);
+	displaySampleRate();
 	ui->rfBW->setValue(m_settings.m_rfBandwidth / 1000);
 	ui->dcOffset->setChecked(m_settings.m_dcBlock);
 	ui->iqImbalance->setChecked(m_settings.m_iqImbalance);
@@ -285,28 +360,27 @@ void RTLSDRGui::on_centerFrequency_changed(quint64 value)
 
 void RTLSDRGui::on_decim_currentIndexChanged(int index)
 {
-	if ((index <0) || (index > 6))
-	{
+	if ((index <0) || (index > 6)) {
 		return;
 	}
 
 	m_settings.m_log2Decim = index;
+    displaySampleRate();
+
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+    } else {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew() * (1 << m_settings.m_log2Decim);
+    }
 
 	sendSettings();
 }
 
 void RTLSDRGui::on_fcPos_currentIndexChanged(int index)
 {
-	if (index == 0) {
-		m_settings.m_fcPos = RTLSDRSettings::FC_POS_INFRA;
-		sendSettings();
-	} else if (index == 1) {
-		m_settings.m_fcPos = RTLSDRSettings::FC_POS_SUPRA;
-		sendSettings();
-	} else if (index == 2) {
-		m_settings.m_fcPos = RTLSDRSettings::FC_POS_CENTER;
-		sendSettings();
-	}
+    m_settings.m_fcPos = (RTLSDRSettings::fcPos_t) (index < 0 ? 0 : index > 2 ? 2 : index);
+    displayFcTooltip();
+    sendSettings();
 }
 
 void RTLSDRGui::on_ppm_valueChanged(int value)
@@ -367,6 +441,12 @@ void RTLSDRGui::on_transverter_clicked()
     sendSettings();
 }
 
+void RTLSDRGui::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
 void RTLSDRGui::updateHardware()
 {
     if (m_doApplySettings)
@@ -380,24 +460,24 @@ void RTLSDRGui::updateHardware()
 
 void RTLSDRGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSourceEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSourceEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSourceEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSourceEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -443,7 +523,13 @@ void RTLSDRGui::on_agc_stateChanged(int state)
 
 void RTLSDRGui::on_sampleRate_changed(quint64 value)
 {
-    m_settings.m_devSampleRate = value;
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = value;
+    } else {
+        m_settings.m_devSampleRate = value * (1 << m_settings.m_log2Decim);
+    }
+
+    displayFcTooltip();
     sendSettings();
 }
 
@@ -463,14 +549,16 @@ void RTLSDRGui::on_lowSampleRate_toggled(bool checked)
 {
     m_settings.m_lowSampleRate = checked;
 
-    if (m_settings.m_lowSampleRate) {
-        ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateLowRangeMin, RTLSDRInput::sampleRateLowRangeMax);
+    displaySampleRate();
+
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
     } else {
-        ui->sampleRate->setValueRange(7, RTLSDRInput::sampleRateHighRangeMin, RTLSDRInput::sampleRateHighRangeMax);
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew() * (1 << m_settings.m_log2Decim);
     }
 
-    m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
     qDebug("RTLSDRGui::on_lowSampleRate_toggled: %d S/s", m_settings.m_devSampleRate);
+
     sendSettings();
 }
 
@@ -491,4 +579,30 @@ void RTLSDRGui::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void RTLSDRGui::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,7 +24,7 @@
 
 ParserBench::ParserBench() :
     m_testOption(QStringList() << "t" << "test",
-        "Test type.",
+        "Test type: decimateii, decimatefi, decimateff, decimateif, decimateinfii, decimatesupii, ambe",
         "test",
         "decimateii"),
     m_nbSamplesOption(QStringList() << "n" << "nb-samples",
@@ -124,6 +125,8 @@ ParserBench::TestType ParserBench::getTestType() const
         return TestDecimatorsInfII;
     } else if (m_testStr == "decimatesupii") {
         return TestDecimatorsSupII;
+    } else if (m_testStr == "ambe") {
+        return TestAMBE;
     } else {
         return TestDecimatorsII;
     }

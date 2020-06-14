@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -888,7 +889,7 @@ static const char *tmc_events[TMC_EVENTS][4] = {
 	{"857","(Q) obstruction(s) on roadway {something that does block the road or part of it}","901","0"},
 	{"858","(Q) obstructions on the road. Danger","902","0"},
 	{"859","(Q) obstructions on the road. Passable with care","981","0"},
-	{"860","(Q) object(s) on roadway {something that does not neccessarily block the road or part of it} ","61","0"},
+	{"860","(Q) object(s) on roadway {something that does not necessarily block the road or part of it} ","61","0"},
 	{"861","(Q) object(s) on the road. Danger","63","0"},
 	{"862","(Q) shed load(s)","210","0"},
 	{"863","(Q) shed load(s). Danger","359","0"},

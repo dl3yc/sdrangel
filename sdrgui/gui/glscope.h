@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,6 +30,7 @@
 #include "dsp/dsptypes.h"
 #include "dsp/scopevis.h"
 #include "gui/scaleengine.h"
+#include "gui/glshadercolors.h"
 #include "gui/glshadersimple.h"
 #include "gui/glshadertextured.h"
 #include "export.h"
@@ -55,8 +57,7 @@ public:
     void connectTimer(const QTimer& timer);
 
     void setTraces(std::vector<ScopeVis::TraceData>* tracesData, std::vector<float *>* traces);
-    void newTraces(std::vector<float *>* traces);
-    void newTraces(std::vector<float *>* traces, int traceIndex);
+    void newTraces(std::vector<float *>* traces, int traceIndex, std::vector<Projector::ProjectionType>* projectionTypes);
 
     int getSampleRate() const { return m_sampleRate; }
     int getTraceSize() const { return m_traceSize; }
@@ -78,7 +79,9 @@ public:
     bool getDataChanged() const { return m_dataChanged; }
     DisplayMode getDisplayMode() const { return m_displayMode; }
     void setDisplayXYPoints(bool value) { m_displayXYPoints = value; }
+    void setDisplayXYPolarGrid(bool value) { m_displayPolGrid = value; }
     const QAtomicInt& getProcessingTraceIndex() const { return m_processingTraceIndex; }
+    void setTraceModulo(int modulo) { m_traceModulo = modulo; }
 
 signals:
     void sampleRateChanged(int);
@@ -88,11 +91,13 @@ signals:
 private:
     std::vector<ScopeVis::TraceData> *m_tracesData;
     std::vector<float *> *m_traces;
+    std::vector<Projector::ProjectionType> *m_projectionTypes;
     QAtomicInt m_processingTraceIndex;
     ScopeVis::TriggerData m_focusedTriggerData;
     //int m_traceCounter;
     uint32_t m_bufferIndex;
     DisplayMode m_displayMode;
+    bool m_displayPolGrid;
     QTimer m_timer;
     QMutex m_mutex;
     QAtomicInt m_dataChanged;
@@ -101,6 +106,7 @@ private:
     int m_timeOfsProMill;
     uint32_t m_triggerPre;
     int m_traceSize;
+    int m_traceModulo; //!< ineffective if <2
     int m_timeBase;
     int m_timeOffset;
     uint32_t m_focusedTraceIndex;
@@ -135,6 +141,7 @@ private:
     QFont m_channelOverlayFont;
 
     GLShaderSimple m_glShaderSimple;
+    GLShaderColors m_glShaderColors;
     GLShaderTextured m_glShaderLeft1Scale;
     GLShaderTextured m_glShaderBottom1Scale;
     GLShaderTextured m_glShaderLeft2Scale;
@@ -146,11 +153,16 @@ private:
     IncrementalArray<GLfloat> m_q3TickY2;
     IncrementalArray<GLfloat> m_q3TickX1;
     IncrementalArray<GLfloat> m_q3TickX2;
+    IncrementalArray<GLfloat> m_q3Radii;  //!< Polar grid radii
+    IncrementalArray<GLfloat> m_q3Circle; //!< Polar grid unit circle
+    IncrementalArray<GLfloat> m_q3Colors; //!< Colors for trace rainbow palette
 
     static const int m_topMargin = 5;
     static const int m_botMargin = 20;
     static const int m_leftMargin = 35;
     static const int m_rightMargin = 5;
+
+    static const GLfloat m_q3RadiiConst[];
 
     void initializeGL();
     void resizeGL(int width, int height);
@@ -168,6 +180,18 @@ private:
             const QColor& color,
             QPixmap& channelOverlayPixmap,
             const QRectF& glScopeRect);
+
+    static bool isPositiveProjection(Projector::ProjectionType& projectionType)
+    {
+        return (projectionType == Projector::ProjectionMagLin)
+            || (projectionType == Projector::ProjectionMagDB)
+            || (projectionType == Projector::ProjectionMagSq);
+    }
+
+    void drawRectGrid2();
+    void drawPolarGrid2();
+    static void drawCircle(float cx, float cy, float r, int num_segments, bool dotted, GLfloat *vertices);
+    static void setColorPalette(int nbVertices, int modulo, GLfloat *colors);
 
 protected slots:
     void cleanup();

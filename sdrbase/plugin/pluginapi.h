@@ -19,9 +19,11 @@ class SDRBASE_API PluginAPI : public QObject {
 public:
     struct SamplingDeviceRegistration //!< This is the device registration
     {
+        QString m_deviceHardwareId;
         QString m_deviceId;
         PluginInterface* m_plugin;
-        SamplingDeviceRegistration(const QString& deviceId, PluginInterface* plugin) :
+        SamplingDeviceRegistration(const QString& hardwareId, const QString& deviceId, PluginInterface* plugin) :
+            m_deviceHardwareId(hardwareId),
             m_deviceId(deviceId),
             m_plugin(plugin)
         { }
@@ -51,11 +53,18 @@ public:
 	void registerTxChannel(const QString& channelIdURI, const QString& channelId, PluginInterface* plugin);
 	ChannelRegistrations *getTxChannelRegistrations();
 
+    // MIMO Channel stuff
+	void registerMIMOChannel(const QString& channelIdURI, const QString& channelId, PluginInterface* plugin);
+	ChannelRegistrations *getMIMOChannelRegistrations();
+
 	// Sample Source stuff
 	void registerSampleSource(const QString& sourceName, PluginInterface* plugin);
 
 	// Sample Sink stuff
 	void registerSampleSink(const QString& sinkName, PluginInterface* plugin);
+
+	// Sample MIMO stuff
+	void registerSampleMIMO(const QString& sinkName, PluginInterface* plugin);
 
 protected:
 	PluginManager* m_pluginManager;

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,9 +18,7 @@
 
 #include "bfmdemodgui.h"
 
-#include <device/devicesourceapi.h>
 #include "device/deviceuiset.h"
-#include <dsp/downchannelizer.h>
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QDebug>
@@ -28,7 +27,6 @@
 #include <iostream>
 #include <iomanip>
 
-#include "dsp/threadedbasebandsamplesink.h"
 #include "dsp/dspengine.h"
 #include "dsp/spectrumvis.h"
 #include "gui/glspectrum.h"
@@ -36,10 +34,12 @@
 #include "util/simpleserializer.h"
 #include "util/db.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "gui/crightclickenabler.h"
 #include "gui/audioselectdialog.h"
 #include "mainwindow.h"
 
+#include "bfmdemodreport.h"
 #include "bfmdemodsettings.h"
 #include "bfmdemod.h"
 #include "rdstmc.h"
@@ -110,11 +110,11 @@ bool BFMDemodGUI::deserialize(const QByteArray& data)
 
 bool BFMDemodGUI::handleMessage(const Message& message)
 {
-    if (BFMDemod::MsgReportChannelSampleRateChanged::match(message))
+    if (BFMDemodReport::MsgReportChannelSampleRateChanged::match(message))
     {
-        BFMDemod::MsgReportChannelSampleRateChanged& report = (BFMDemod::MsgReportChannelSampleRateChanged&) message;
+        BFMDemodReport::MsgReportChannelSampleRateChanged& report = (BFMDemodReport::MsgReportChannelSampleRateChanged&) message;
         m_rate = report.getSampleRate();
-        qDebug("BFMDemodGUI::handleMessage: MsgReportChannelSampleRateChanged: %d S/s", m_rate);
+        qDebug("BFMDemodGUI::handleMessage: BFMDemodReport::MsgReportChannelSampleRateChanged: %d S/s", m_rate);
         ui->glSpectrum->setCenterFrequency(m_rate / 4);
         ui->glSpectrum->setSampleRate(m_rate / 2);
         return true;
@@ -318,29 +318,48 @@ void BFMDemodGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void BFMDemodGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_bfmDemod->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 BFMDemodGUI::BFMDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel, QWidget* parent) :
@@ -366,10 +385,11 @@ BFMDemodGUI::BFMDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseban
     connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
     connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()));
 
-	m_spectrumVis = new SpectrumVis(SDR_RX_SCALEF, ui->glSpectrum);
 	m_bfmDemod = (BFMDemod*) rxChannel; //new BFMDemod(m_deviceUISet->m_deviceSourceAPI);
+    m_spectrumVis = m_bfmDemod->getSpectrumVis();
+	m_spectrumVis->setGLSpectrum(ui->glSpectrum);
 	m_bfmDemod->setMessageQueueToGUI(getInputMessageQueue());
-	m_bfmDemod->setSampleSink(m_spectrumVis);
+    m_bfmDemod->setBasebandMessageQueueToGUI(getInputMessageQueue());
 
 	ui->glSpectrum->setCenterFrequency(m_rate / 4);
 	ui->glSpectrum->setSampleRate(m_rate / 2);
@@ -377,13 +397,15 @@ BFMDemodGUI::BFMDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseban
 	ui->glSpectrum->setDisplayMaxHold(false);
 	ui->glSpectrum->setSsbSpectrum(true);
 	m_spectrumVis->configure(
-	        m_spectrumVis->getInputMessageQueue(),
-            64, // FFT size
-            10, // overlapping %
-            0,  // number of averaging samples
-            0,  // no averaging
-	        FFTWindow::BlackmanHarris,
-	        false); // logarithmic scale
+        64, // FFT size
+        0, // Ref level (dB)
+        100, // Power range (dB)
+        10, // overlapping %
+        0,  // number of averaging samples
+        SpectrumVis::AvgModeNone,  // no averaging
+        FFTWindow::BlackmanHarris,
+        false // logarithmic scale
+    );
 	connect(&MainWindow::getInstance()->getMasterTimer(), SIGNAL(timeout()), this, SLOT(tick()));
 
 	m_channelMarker.blockSignals(true);
@@ -406,7 +428,7 @@ BFMDemodGUI::BFMDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseban
 	connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
     connect(&m_channelMarker, SIGNAL(highlightedByCursor()), this, SLOT(channelMarkerHighlightedByCursor()));
 
-	ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+	ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
 	ui->g00AltFrequenciesBox->setEnabled(false);
 	ui->g14MappedFrequencies->setEnabled(false);
@@ -422,7 +444,6 @@ BFMDemodGUI::~BFMDemodGUI()
 {
     m_deviceUISet->removeRxChannelInstance(this);
 	delete m_bfmDemod; // TODO: check this: when the GUI closes it has to delete the demodulator
-	delete m_spectrumVis;
 	delete ui;
 }
 
@@ -435,11 +456,6 @@ void BFMDemodGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-	    BFMDemod::MsgConfigureChannelizer *msgChan = BFMDemod::MsgConfigureChannelizer::create(
-	            BFMDemod::requiredBW(m_settings.m_rfBandwidth),
-	            m_settings.m_inputFrequencyOffset);
-	    m_bfmDemod->getInputMessageQueue()->push(msgChan);
-
         BFMDemod::MsgConfigureBFMDemod* msgConfig = BFMDemod::MsgConfigureBFMDemod::create( m_settings, force);
         m_bfmDemod->getInputMessageQueue()->push(msgConfig);
 	}
@@ -478,7 +494,18 @@ void BFMDemodGUI::displaySettings()
     ui->showPilot->setChecked(m_settings.m_showPilot);
     ui->rds->setChecked(m_settings.m_rdsActive);
 
+    displayStreamIndex();
+
     blockApplySettings(false);
+}
+
+void BFMDemodGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void BFMDemodGUI::leaveEvent(QEvent*)

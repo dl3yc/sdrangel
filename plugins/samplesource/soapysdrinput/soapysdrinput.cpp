@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,10 +25,11 @@
 #include "SWGSoapySDRInputSettings.h"
 #include "SWGDeviceState.h"
 #include "SWGDeviceReport.h"
+#include "SWGDeviceActions.h"
 #include "SWGSoapySDRReport.h"
+#include "SWGSoapySDRInputActions.h"
 
-#include "device/devicesourceapi.h"
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "dsp/dspcommands.h"
 #include "dsp/filerecord.h"
 #include "dsp/dspengine.h"
@@ -41,7 +43,7 @@ MESSAGE_CLASS_DEFINITION(SoapySDRInput::MsgFileRecord, Message)
 MESSAGE_CLASS_DEFINITION(SoapySDRInput::MsgStartStop, Message)
 MESSAGE_CLASS_DEFINITION(SoapySDRInput::MsgReportGainChange, Message)
 
-SoapySDRInput::SoapySDRInput(DeviceSourceAPI *deviceAPI) :
+SoapySDRInput::SoapySDRInput(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
     m_settings(),
     m_deviceDescription("SoapySDRInput"),
@@ -55,7 +57,8 @@ SoapySDRInput::SoapySDRInput(DeviceSourceAPI *deviceAPI) :
     initDeviceArgSettings(m_settings);
 
     m_fileSink = new FileRecord(QString("test_%1.sdriq").arg(m_deviceAPI->getDeviceUID()));
-    m_deviceAPI->addSink(m_fileSink);
+    m_deviceAPI->setNbSourceStreams(1);
+    m_deviceAPI->addAncillarySink(m_fileSink);
 
     m_networkManager = new QNetworkAccessManager();
     connect(m_networkManager, SIGNAL(finished(QNetworkReply*)), this, SLOT(networkManagerFinished(QNetworkReply*)));
@@ -70,7 +73,7 @@ SoapySDRInput::~SoapySDRInput()
         stop();
     }
 
-    m_deviceAPI->removeSink(m_fileSink);
+    m_deviceAPI->removeAncillarySink(m_fileSink);
     delete m_fileSink;
 
     closeDevice();
@@ -98,7 +101,7 @@ bool SoapySDRInput::openDevice()
     {
         qDebug("SoapySDRInput::openDevice: look in Rx buddies");
 
-        DeviceSourceAPI *sourceBuddy = m_deviceAPI->getSourceBuddies()[0];
+        DeviceAPI *sourceBuddy = m_deviceAPI->getSourceBuddies()[0];
         DeviceSoapySDRShared *deviceSoapySDRShared = (DeviceSoapySDRShared*) sourceBuddy->getBuddySharedPtr();
 
         if (deviceSoapySDRShared == 0)
@@ -123,7 +126,7 @@ bool SoapySDRInput::openDevice()
     {
         qDebug("SoapySDRInput::openDevice: look in Tx buddies");
 
-        DeviceSinkAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
+        DeviceAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
         DeviceSoapySDRShared *deviceSoapySDRShared = (DeviceSoapySDRShared*) sinkBuddy->getBuddySharedPtr();
 
         if (deviceSoapySDRShared == 0)
@@ -148,7 +151,7 @@ bool SoapySDRInput::openDevice()
     {
         qDebug("SoapySDRInput::openDevice: open device here");
         DeviceSoapySDR& deviceSoapySDR = DeviceSoapySDR::instance();
-        m_deviceShared.m_device = deviceSoapySDR.openSoapySDR(m_deviceAPI->getSampleSourceSequence());
+        m_deviceShared.m_device = deviceSoapySDR.openSoapySDR(m_deviceAPI->getSamplingDeviceSequence(), m_deviceAPI->getHardwareUserArguments());
 
         if (!m_deviceShared.m_device)
         {
@@ -159,7 +162,7 @@ bool SoapySDRInput::openDevice()
         m_deviceShared.m_deviceParams = new DeviceSoapySDRParams(m_deviceShared.m_device);
     }
 
-    m_deviceShared.m_channel = m_deviceAPI->getItemIndex(); // publicly allocate channel
+    m_deviceShared.m_channel = m_deviceAPI->getDeviceItemIndex(); // publicly allocate channel
     m_deviceShared.m_source = this;
     m_deviceAPI->setBuddySharedPtr(&m_deviceShared); // propagate common parameters to API
     return true;
@@ -397,8 +400,8 @@ SoapySDRInputThread *SoapySDRInput::findThread()
         SoapySDRInputThread *soapySDRInputThread = 0;
 
         // find a buddy that has allocated the thread
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        std::vector<DeviceSourceAPI*>::const_iterator it = sourceBuddies.begin();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sourceBuddies.begin();
 
         for (; it != sourceBuddies.end(); ++it)
         {
@@ -424,8 +427,8 @@ SoapySDRInputThread *SoapySDRInput::findThread()
 
 void SoapySDRInput::moveThreadToBuddy()
 {
-    const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-    std::vector<DeviceSourceAPI*>::const_iterator it = sourceBuddies.begin();
+    const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+    std::vector<DeviceAPI*>::const_iterator it = sourceBuddies.begin();
 
     for (; it != sourceBuddies.end(); ++it)
     {
@@ -481,7 +484,7 @@ bool SoapySDRInput::start()
         return false;
     }
 
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     SoapySDRInputThread *soapySDRInputThread = findThread();
     bool needsStart = false;
 
@@ -519,8 +522,8 @@ bool SoapySDRInput::start()
             }
 
             // remove old thread address from buddies (reset in all buddies). The address being held only in the owning source.
-            const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-            std::vector<DeviceSourceAPI*>::const_iterator it = sourceBuddies.begin();
+            const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+            std::vector<DeviceAPI*>::const_iterator it = sourceBuddies.begin();
 
             for (; it != sourceBuddies.end(); ++it) {
                 ((DeviceSoapySDRShared*) (*it)->getBuddySharedPtr())->m_source->setThread(0);
@@ -587,7 +590,7 @@ void SoapySDRInput::stop()
         return;
     }
 
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     SoapySDRInputThread *soapySDRInputThread = findThread();
 
     if (soapySDRInputThread == 0) { // no thread allocated
@@ -604,8 +607,8 @@ void SoapySDRInput::stop()
         m_thread = 0;
 
         // remove old thread address from buddies (reset in all buddies)
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        std::vector<DeviceSourceAPI*>::const_iterator it = sourceBuddies.begin();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sourceBuddies.begin();
 
         for (; it != sourceBuddies.end(); ++it) {
             ((DeviceSoapySDRShared*) (*it)->getBuddySharedPtr())->m_source->setThread(0);
@@ -653,8 +656,8 @@ void SoapySDRInput::stop()
         }
 
         // remove old thread address from buddies (reset in all buddies). The address being held only in the owning source.
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        std::vector<DeviceSourceAPI*>::const_iterator it = sourceBuddies.begin();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        std::vector<DeviceAPI*>::const_iterator it = sourceBuddies.begin();
 
         for (; it != sourceBuddies.end(); ++it) {
             ((DeviceSoapySDRShared*) (*it)->getBuddySharedPtr())->m_source->setThread(0);
@@ -823,14 +826,14 @@ bool SoapySDRInput::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initAcquisition())
+            if (m_deviceAPI->initDeviceEngine())
             {
-                m_deviceAPI->startAcquisition();
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopAcquisition();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         if (m_settings.m_useReverseAPI) {
@@ -841,7 +844,7 @@ bool SoapySDRInput::handleMessage(const Message& message)
     }
     else if (DeviceSoapySDRShared::MsgReportBuddyChange::match(message))
     {
-        int requestedChannel = m_deviceAPI->getItemIndex();
+        int requestedChannel = m_deviceAPI->getDeviceItemIndex();
         DeviceSoapySDRShared::MsgReportBuddyChange& report = (DeviceSoapySDRShared::MsgReportBuddyChange&) message;
         SoapySDRInputSettings settings = m_settings;
         settings.m_fcPos = (SoapySDRInputSettings::fcPos_t) report.getFcPos();
@@ -918,7 +921,7 @@ bool SoapySDRInput::applySettings(const SoapySDRInputSettings& settings, bool fo
 
     SoapySDR::Device *dev = m_deviceShared.m_device;
     SoapySDRInputThread *inputThread = findThread();
-    int requestedChannel = m_deviceAPI->getItemIndex();
+    int requestedChannel = m_deviceAPI->getDeviceItemIndex();
     qint64 xlatedDeviceCenterFrequency = settings.m_centerFrequency;
     xlatedDeviceCenterFrequency -= settings.m_transverterMode ? settings.m_transverterDeltaFrequency : 0;
     xlatedDeviceCenterFrequency = xlatedDeviceCenterFrequency < 0 ? 0 : xlatedDeviceCenterFrequency;
@@ -1018,7 +1021,9 @@ bool SoapySDRInput::applySettings(const SoapySDRInputSettings& settings, bool fo
                 0,
                 settings.m_log2Decim,
                 (DeviceSampleSource::fcPos_t) settings.m_fcPos,
-                settings.m_devSampleRate);
+                settings.m_devSampleRate,
+                DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD,
+                false);
 
         forwardChangeOwnDSP = true;
         forwardChangeToBuddies = true;
@@ -1272,8 +1277,8 @@ bool SoapySDRInput::applySettings(const SoapySDRInputSettings& settings, bool fo
     if (forwardChangeToBuddies)
     {
         // send to buddies
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
 
         for (const auto &itSource : sourceBuddies)
         {
@@ -1283,7 +1288,7 @@ bool SoapySDRInput::applySettings(const SoapySDRInputSettings& settings, bool fo
                     (int) settings.m_fcPos,
                     settings.m_devSampleRate,
                     true);
-            itSource->getSampleSourceInputMessageQueue()->push(report);
+            itSource->getSamplingDeviceInputMessageQueue()->push(report);
         }
 
         for (const auto &itSink : sinkBuddies)
@@ -1294,28 +1299,28 @@ bool SoapySDRInput::applySettings(const SoapySDRInputSettings& settings, bool fo
                     (int) settings.m_fcPos,
                     settings.m_devSampleRate,
                     true);
-            itSink->getSampleSinkInputMessageQueue()->push(report);
+            itSink->getSamplingDeviceInputMessageQueue()->push(report);
         }
     }
 
     if (deviceArgsChanged)
     {
         // send to buddies
-        const std::vector<DeviceSourceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
-        const std::vector<DeviceSinkAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
+        const std::vector<DeviceAPI*>& sourceBuddies = m_deviceAPI->getSourceBuddies();
+        const std::vector<DeviceAPI*>& sinkBuddies = m_deviceAPI->getSinkBuddies();
 
         for (const auto &itSource : sourceBuddies)
         {
             DeviceSoapySDRShared::MsgReportDeviceArgsChange *report = DeviceSoapySDRShared::MsgReportDeviceArgsChange::create(
                     settings.m_deviceArgSettings);
-            itSource->getSampleSourceInputMessageQueue()->push(report);
+            itSource->getSamplingDeviceInputMessageQueue()->push(report);
         }
 
         for (const auto &itSink : sinkBuddies)
         {
             DeviceSoapySDRShared::MsgReportDeviceArgsChange *report = DeviceSoapySDRShared::MsgReportDeviceArgsChange::create(
                     settings.m_deviceArgSettings);
-            itSink->getSampleSinkInputMessageQueue()->push(report);
+            itSink->getSamplingDeviceInputMessageQueue()->push(report);
         }
     }
 
@@ -1417,6 +1422,29 @@ int SoapySDRInput::webapiSettingsPutPatch(
 {
     (void) errorMessage;
     SoapySDRInputSettings settings = m_settings;
+    webapiUpdateDeviceSettings(settings, deviceSettingsKeys, response);
+
+    MsgConfigureSoapySDRInput *msg = MsgConfigureSoapySDRInput::create(settings, force);
+    m_inputMessageQueue.push(msg);
+
+    if (m_guiMessageQueue) // forward to GUI if any
+    {
+        MsgConfigureSoapySDRInput *msgToGUI = MsgConfigureSoapySDRInput::create(settings, force);
+        m_guiMessageQueue->push(msgToGUI);
+    }
+
+    webapiFormatDeviceSettings(response, settings);
+    return 200;
+}
+
+void SoapySDRInput::webapiUpdateDeviceSettings(
+        SoapySDRInputSettings& settings,
+        const QStringList& deviceSettingsKeys,
+        SWGSDRangel::SWGDeviceSettings& response)
+{
+    for (int i = 0; i < deviceSettingsKeys.count(); i++) {
+        qDebug("SoapySDRInput::webapiUpdateDeviceSettings %s", qPrintable(deviceSettingsKeys.at(i)));
+    }
 
     if (deviceSettingsKeys.contains("centerFrequency")) {
         settings.m_centerFrequency = response.getSoapySdrInputSettings()->getCenterFrequency();
@@ -1468,6 +1496,11 @@ int SoapySDRInput::webapiSettingsPutPatch(
                 QVariant v = webapiVariantFromArgValue(itArg);
                 itSettings.value() = v.toDouble();
             }
+            else
+            {
+                QVariant v = webapiVariantFromArgValue(itArg);
+                settings.m_tunableElements.insert(*itArg->getKey(), v.toDouble());
+            }
         }
     }
 
@@ -1487,6 +1520,11 @@ int SoapySDRInput::webapiSettingsPutPatch(
             {
                 QVariant v = webapiVariantFromArgValue(itArg);
                 itSettings.value() = v.toDouble();
+            }
+            else
+            {
+                QVariant v = webapiVariantFromArgValue(itArg);
+                settings.m_individualGains.insert(*itArg->getKey(), v.toDouble());
             }
         }
     }
@@ -1521,6 +1559,8 @@ int SoapySDRInput::webapiSettingsPutPatch(
 
             if (itSettings != settings.m_streamArgSettings.end()) {
                 itSettings.value() = webapiVariantFromArgValue(itArg);
+            } else {
+                settings.m_streamArgSettings.insert(*itArg->getKey(), webapiVariantFromArgValue(itArg));
             }
         }
     }
@@ -1535,6 +1575,8 @@ int SoapySDRInput::webapiSettingsPutPatch(
 
             if (itSettings != settings.m_deviceArgSettings.end()) {
                 itSettings.value() = webapiVariantFromArgValue(itArg);
+            } else {
+                settings.m_deviceArgSettings.insert(*itArg->getKey(), webapiVariantFromArgValue(itArg));
             }
         }
     }
@@ -1551,18 +1593,6 @@ int SoapySDRInput::webapiSettingsPutPatch(
     if (deviceSettingsKeys.contains("reverseAPIDeviceIndex")) {
         settings.m_reverseAPIDeviceIndex = response.getSoapySdrInputSettings()->getReverseApiDeviceIndex();
     }
-
-    MsgConfigureSoapySDRInput *msg = MsgConfigureSoapySDRInput::create(settings, force);
-    m_inputMessageQueue.push(msg);
-
-    if (m_guiMessageQueue) // forward to GUI if any
-    {
-        MsgConfigureSoapySDRInput *msgToGUI = MsgConfigureSoapySDRInput::create(settings, force);
-        m_guiMessageQueue->push(msgToGUI);
-    }
-
-    webapiFormatDeviceSettings(response, settings);
-    return 200;
 }
 
 int SoapySDRInput::webapiReportGet(SWGSDRangel::SWGDeviceReport& response, QString& errorMessage)
@@ -1600,6 +1630,37 @@ int SoapySDRInput::webapiRun(
     }
 
     return 200;
+}
+
+int SoapySDRInput::webapiActionsPost(
+        const QStringList& deviceActionsKeys,
+        SWGSDRangel::SWGDeviceActions& query,
+        QString& errorMessage)
+{
+    SWGSDRangel::SWGSoapySDRInputActions *swgSoapySDRInputActions = query.getSoapySdrInputActions();
+
+    if (swgSoapySDRInputActions)
+    {
+        if (deviceActionsKeys.contains("record"))
+        {
+            bool record = swgSoapySDRInputActions->getRecord() != 0;
+            MsgFileRecord *msg = MsgFileRecord::create(record);
+            getInputMessageQueue()->push(msg);
+
+            if (getMessageQueueToGUI())
+            {
+                MsgFileRecord *msgToGUI = MsgFileRecord::create(record);
+                getMessageQueueToGUI()->push(msgToGUI);
+            }
+        }
+
+        return 202;
+    }
+    else
+    {
+        errorMessage = "Missing SoapySDRInputActions in query";
+        return 400;
+    }
 }
 
 void SoapySDRInput::webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const SoapySDRInputSettings& settings)
@@ -1905,7 +1966,8 @@ void SoapySDRInput::webapiFormatArgInfo(const SoapySDR::ArgInfo& arg, SWGSDRange
 void SoapySDRInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const SoapySDRInputSettings& settings, bool force)
 {
     SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
-    swgDeviceSettings->setTx(0);
+    swgDeviceSettings->setDirection(0); // Single Tx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
     swgDeviceSettings->setDeviceHwType(new QString("SoapySDR"));
     swgDeviceSettings->setSoapySdrInputSettings(new SWGSDRangel::SWGSoapySDRInputSettings());
     swgDeviceSettings->getSoapySdrInputSettings()->init();
@@ -1981,30 +2043,46 @@ void SoapySDRInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
     m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QBuffer *buffer=new QBuffer();
+    QBuffer *buffer = new QBuffer();
     buffer->open((QBuffer::ReadWrite));
     buffer->write(swgDeviceSettings->asJson().toUtf8());
     buffer->seek(0);
 
     // Always use PATCH to avoid passing reverse API settings
-    m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    buffer->setParent(reply);
 
     delete swgDeviceSettings;
 }
 
 void SoapySDRInput::webapiReverseSendStartStop(bool start)
 {
+    SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
+    swgDeviceSettings->setDirection(0); // Single Tx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
+    swgDeviceSettings->setDeviceHwType(new QString("SoapySDR"));
+
     QString deviceSettingsURL = QString("http://%1:%2/sdrangel/deviceset/%3/device/run")
             .arg(m_settings.m_reverseAPIAddress)
             .arg(m_settings.m_reverseAPIPort)
             .arg(m_settings.m_reverseAPIDeviceIndex);
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
+    m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QBuffer *buffer = new QBuffer();
+    buffer->open((QBuffer::ReadWrite));
+    buffer->write(swgDeviceSettings->asJson().toUtf8());
+    buffer->seek(0);
+    QNetworkReply *reply;
 
     if (start) {
-        m_networkManager->sendCustomRequest(m_networkRequest, "POST");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "POST", buffer);
     } else {
-        m_networkManager->sendCustomRequest(m_networkRequest, "DELETE");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "DELETE", buffer);
     }
+
+    buffer->setParent(reply);
+    delete swgDeviceSettings;
 }
 
 void SoapySDRInput::networkManagerFinished(QNetworkReply *reply)
@@ -2017,10 +2095,13 @@ void SoapySDRInput::networkManagerFinished(QNetworkReply *reply)
                 << " error(" << (int) replyError
                 << "): " << replyError
                 << ": " << reply->errorString();
-        return;
+    }
+    else
+    {
+        QString answer = reply->readAll();
+        answer.chop(1); // remove last \n
+        qDebug("SoapySDRInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
     }
 
-    QString answer = reply->readAll();
-    answer.chop(1); // remove last \n
-    qDebug("SoapySDRInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    reply->deleteLater();
 }

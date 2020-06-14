@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,6 +22,7 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 #include <QTime>
 #include <QDateTime>
 #include <QString>
@@ -38,7 +40,7 @@
 #include "dsp/dspcommands.h"
 #include "mainwindow.h"
 #include "util/simpleserializer.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "remoteinputgui.h"
 
@@ -52,7 +54,7 @@ RemoteInputGui::RemoteInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_acquisition(false),
 	m_streamSampleRate(0),
 	m_streamCenterFrequency(0),
-	m_lastEngineState(DSPDeviceSourceEngine::StNotStarted),
+	m_lastEngineState(DeviceAPI::StNotStarted),
 	m_framesDecodingStatus(0),
 	m_bufferLengthInSecs(0.0),
     m_bufferGauge(-50),
@@ -79,8 +81,14 @@ RemoteInputGui::RemoteInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
 	ui->centerFrequency->setValueRange(7, 0, 9999999U);
 
+	ui->centerFrequencyHz->setColorMapper(ColorMapper(ColorMapper::GrayGold));
+	ui->centerFrequencyHz->setValueRange(3, 0, 999U);
+
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
 	displaySettings();
 
@@ -88,7 +96,7 @@ RemoteInputGui::RemoteInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_statusTimer.start(500);
     connect(&m_updateTimer, SIGNAL(timeout()), this, SLOT(updateHardware()));
 
-    m_sampleSource = (RemoteInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_sampleSource = (RemoteInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
 	connect(&m_inputMessageQueue, SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()), Qt::QueuedConnection);
 	m_sampleSource->setMessageQueueToGUI(&m_inputMessageQueue);
@@ -234,6 +242,23 @@ bool RemoteInputGui::handleMessage(const Message& message)
 
         return true;
     }
+    else if (RemoteInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const RemoteInput::MsgFileRecord& notif = (const RemoteInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
 	else
 	{
 		return false;
@@ -283,6 +308,7 @@ void RemoteInputGui::updateSampleRateAndFrequency()
     ui->deviceRateText->setText(tr("%1k").arg((float)m_streamSampleRate / 1000));
     blockApplySettings(true);
     ui->centerFrequency->setValue(m_streamCenterFrequency / 1000);
+    ui->centerFrequencyHz->setValue(m_streamCenterFrequency % 1000);
     blockApplySettings(false);
 }
 
@@ -291,6 +317,7 @@ void RemoteInputGui::displaySettings()
     blockApplySettings(true);
 
     ui->centerFrequency->setValue(m_streamCenterFrequency / 1000);
+    ui->centerFrequencyHz->setValue(m_streamCenterFrequency % 1000);
     ui->deviceRateText->setText(tr("%1k").arg(m_streamSampleRate / 1000.0));
 
     ui->apiAddress->setText(m_settings.m_apiAddress);
@@ -532,24 +559,24 @@ void RemoteInputGui::updateStatus()
 {
     if (m_sampleSource->isStreaming())
     {
-        int state = m_deviceUISet->m_deviceSourceAPI->state();
+        int state = m_deviceUISet->m_deviceAPI->state();
 
         if (m_lastEngineState != state)
         {
             switch(state)
             {
-                case DSPDeviceSourceEngine::StNotStarted:
+                case DeviceAPI::StNotStarted:
                     ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                     break;
-                case DSPDeviceSourceEngine::StIdle:
+                case DeviceAPI::StIdle:
                     ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                     break;
-                case DSPDeviceSourceEngine::StRunning:
+                case DeviceAPI::StRunning:
                     ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                     break;
-                case DSPDeviceSourceEngine::StError:
+                case DeviceAPI::StError:
                     ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                    QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                    QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                     break;
                 default:
                     break;
@@ -574,38 +601,41 @@ void RemoteInputGui::networkManagerFinished(QNetworkReply *reply)
     {
         ui->apiAddressLabel->setStyleSheet("QLabel { background:rgb(79,79,79); }");
         ui->statusText->setText(reply->errorString());
-        return;
     }
-
-    QString answer = reply->readAll();
-
-    try
+    else
     {
-        QByteArray jsonBytes(answer.toStdString().c_str());
-        QJsonParseError error;
-        QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &error);
+        QString answer = reply->readAll();
 
-        if (error.error == QJsonParseError::NoError)
+        try
         {
-            ui->apiAddressLabel->setStyleSheet("QLabel { background-color : green; }");
-            ui->statusText->setText(QString("API OK"));
-            analyzeApiReply(doc.object());
+            QByteArray jsonBytes(answer.toStdString().c_str());
+            QJsonParseError error;
+            QJsonDocument doc = QJsonDocument::fromJson(jsonBytes, &error);
+
+            if (error.error == QJsonParseError::NoError)
+            {
+                ui->apiAddressLabel->setStyleSheet("QLabel { background-color : green; }");
+                ui->statusText->setText(QString("API OK"));
+                analyzeApiReply(doc.object());
+            }
+            else
+            {
+                ui->apiAddressLabel->setStyleSheet("QLabel { background:rgb(79,79,79); }");
+                QString errorMsg = QString("Reply JSON error: ") + error.errorString() + QString(" at offset ") + QString::number(error.offset);
+                ui->statusText->setText(QString("JSON error. See log"));
+                qInfo().noquote() << "RemoteInputGui::networkManagerFinished" << errorMsg;
+            }
         }
-        else
+        catch (const std::exception& ex)
         {
             ui->apiAddressLabel->setStyleSheet("QLabel { background:rgb(79,79,79); }");
-            QString errorMsg = QString("Reply JSON error: ") + error.errorString() + QString(" at offset ") + QString::number(error.offset);
-            ui->statusText->setText(QString("JSON error. See log"));
+            QString errorMsg = QString("Error parsing request: ") + ex.what();
+            ui->statusText->setText("Error parsing request. See log for details");
             qInfo().noquote() << "RemoteInputGui::networkManagerFinished" << errorMsg;
         }
     }
-    catch (const std::exception& ex)
-    {
-        ui->apiAddressLabel->setStyleSheet("QLabel { background:rgb(79,79,79); }");
-        QString errorMsg = QString("Error parsing request: ") + ex.what();
-        ui->statusText->setText("Error parsing request. See log for details");
-        qInfo().noquote() << "RemoteInputGui::networkManagerFinished" << errorMsg;
-    }
+
+    reply->deleteLater();
 }
 
 void RemoteInputGui::analyzeApiReply(const QJsonObject& jsonObject)
@@ -613,7 +643,7 @@ void RemoteInputGui::analyzeApiReply(const QJsonObject& jsonObject)
     QString infoLine;
 
     if (jsonObject.contains("version")) {
-        infoLine = "v" + jsonObject["version"].toString();
+        infoLine = jsonObject["version"].toString();
     }
 
     if (jsonObject.contains("qtVersion")) {
@@ -654,4 +684,30 @@ void RemoteInputGui::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void RemoteInputGui::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

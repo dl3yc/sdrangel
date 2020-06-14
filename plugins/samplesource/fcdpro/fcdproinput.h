@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -37,7 +38,7 @@ struct fcd_buffer {
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class FCDProThread;
 class FileRecord;
 
@@ -105,7 +106,7 @@ public:
         { }
     };
 
-	FCDProInput(DeviceSourceAPI *deviceAPI);
+	FCDProInput(DeviceAPI *deviceAPI);
 	virtual ~FCDProInput();
 	virtual void destroy();
 
@@ -119,6 +120,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -143,6 +145,20 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const FCDProSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            FCDProSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     void set_center_freq(double freq);
 	void set_bias_t(bool on);
 	void set_lnaGain(int index);
@@ -163,7 +179,7 @@ public:
 	void set_gain6(int index);
 
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	hid_device *m_dev;
     AudioInput m_fcdAudioInput;
     AudioFifo m_fcdFIFO;
@@ -182,7 +198,6 @@ private:
     void closeFCDAudio();
 	void applySettings(const FCDProSettings& settings, bool force);
 
-	void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const FCDProSettings& settings);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const FCDProSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);
 

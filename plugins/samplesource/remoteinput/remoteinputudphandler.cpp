@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,12 +21,12 @@
 
 #include "dsp/dspcommands.h"
 #include "dsp/dspengine.h"
-#include <device/devicesourceapi.h>
+#include "device/deviceapi.h"
 
 #include "remoteinputudphandler.h"
 #include "remoteinput.h"
 
-RemoteInputUDPHandler::RemoteInputUDPHandler(SampleSinkFifo *sampleFifo, DeviceSourceAPI *deviceAPI) :
+RemoteInputUDPHandler::RemoteInputUDPHandler(SampleSinkFifo *sampleFifo, DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
     m_masterTimer(deviceAPI->getMasterTimer()),
     m_masterTimerConnected(false),
@@ -194,16 +195,16 @@ void RemoteInputUDPHandler::processData()
 
     if (change && (m_samplerate != 0))
     {
-        qDebug("RemoteInputUDPHandler::processData: m_samplerate: %u m_centerFrequency: %u kHz", m_samplerate, m_centerFrequency);
+        qDebug("RemoteInputUDPHandler::processData: m_samplerate: %u S/s m_centerFrequency: %lu Hz", m_samplerate, m_centerFrequency);
 
-        DSPSignalNotification *notif = new DSPSignalNotification(m_samplerate, m_centerFrequency * 1000); // Frequency in Hz for the DSP engine
+        DSPSignalNotification *notif = new DSPSignalNotification(m_samplerate, m_centerFrequency); // Frequency in Hz for the DSP engine
         m_deviceAPI->getDeviceEngineInputMessageQueue()->push(notif);
 
         if (m_outputMessageQueueToGUI)
         {
             RemoteInput::MsgReportRemoteInputStreamData *report = RemoteInput::MsgReportRemoteInputStreamData::create(
                 m_samplerate,
-                m_centerFrequency * 1000, // Frequency in Hz for the GUI
+                m_centerFrequency, // Frequency in Hz for the GUI
                 m_tv_msec);
 
             m_outputMessageQueueToGUI->push(report);
@@ -255,8 +256,13 @@ void RemoteInputUDPHandler::tick()
         m_throttleToggle = !m_throttleToggle;
     }
 
-    if (m_autoCorrBuffer) {
+    if (m_autoCorrBuffer)
+    {
         m_readLengthSamples += m_remoteInputBuffer.getRWBalanceCorrection();
+        // Eliminate negative or excessively high values
+        m_readLengthSamples = m_readLengthSamples < 0 ?
+            0 : m_readLengthSamples > (int) m_remoteInputBuffer.getCurrentMeta().m_sampleRate/5 ?
+                m_remoteInputBuffer.getCurrentMeta().m_sampleRate/5 : m_readLengthSamples;
     }
 
     const RemoteMetaDataFEC& metaData =  m_remoteInputBuffer.getCurrentMeta();
@@ -264,7 +270,7 @@ void RemoteInputUDPHandler::tick()
 
     if ((metaData.m_sampleBits == 16) && (SDR_RX_SAMP_SZ == 24)) // 16 -> 24 bits
     {
-        if (m_readLengthSamples > m_converterBufferNbSamples)
+        if (m_readLengthSamples > (int) m_converterBufferNbSamples)
         {
             if (m_converterBuffer) { delete[] m_converterBuffer; }
             m_converterBuffer = new int32_t[m_readLengthSamples*2];
@@ -272,7 +278,7 @@ void RemoteInputUDPHandler::tick()
 
         uint8_t *buf = m_remoteInputBuffer.readData(m_readLength);
 
-        for (unsigned int is = 0; is < m_readLengthSamples; is++)
+        for (int is = 0; is < m_readLengthSamples; is++)
         {
             m_converterBuffer[2*is] = ((int16_t*)buf)[2*is]; // I
             m_converterBuffer[2*is]<<=8;
@@ -284,7 +290,7 @@ void RemoteInputUDPHandler::tick()
     }
     else if ((metaData.m_sampleBits == 24) && (SDR_RX_SAMP_SZ == 16)) // 24 -> 16 bits
     {
-        if (m_readLengthSamples > m_converterBufferNbSamples)
+        if (m_readLengthSamples > (int) m_converterBufferNbSamples)
         {
             if (m_converterBuffer) { delete[] m_converterBuffer; }
             m_converterBuffer = new int32_t[m_readLengthSamples];
@@ -292,7 +298,7 @@ void RemoteInputUDPHandler::tick()
 
         uint8_t *buf = m_remoteInputBuffer.readData(m_readLength);
 
-        for (unsigned int is = 0; is < m_readLengthSamples; is++)
+        for (int is = 0; is < m_readLengthSamples; is++)
         {
             m_converterBuffer[is] =  ((int32_t *)buf)[2*is+1]>>8; // Q -> MSB
             m_converterBuffer[is] <<=16;

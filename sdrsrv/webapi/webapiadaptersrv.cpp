@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,42 +22,55 @@
 #include <QTextStream>
 #include <QSysInfo>
 
-#include <unistd.h>
-
 #include "SWGInstanceSummaryResponse.h"
+#include "SWGInstanceConfigResponse.h"
 #include "SWGInstanceDevicesResponse.h"
 #include "SWGInstanceChannelsResponse.h"
 #include "SWGLoggingInfo.h"
 #include "SWGAudioDevices.h"
 #include "SWGLocationInformation.h"
-#include "SWGDVSeralDevices.h"
+#include "SWGDVSerialDevices.h"
+#include "SWGAMBEDevices.h"
 #include "SWGPresetImport.h"
 #include "SWGPresetExport.h"
 #include "SWGPresets.h"
 #include "SWGPresetTransfer.h"
 #include "SWGDeviceSettings.h"
+#include "SWGDeviceActions.h"
 #include "SWGChannelsDetail.h"
 #include "SWGChannelSettings.h"
 #include "SWGChannelReport.h"
+#include "SWGChannelActions.h"
 #include "SWGSuccessResponse.h"
 #include "SWGErrorResponse.h"
 #include "SWGDeviceState.h"
 #include "SWGDeviceReport.h"
+#include "SWGLimeRFEDevices.h"
+#include "SWGLimeRFESettings.h"
+#include "SWGLimeRFEPower.h"
 
 #include "maincore.h"
 #include "loggerwithfile.h"
 #include "device/deviceset.h"
-#include "device/devicesinkapi.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceenumerator.h"
 #include "dsp/devicesamplesink.h"
 #include "dsp/devicesamplesource.h"
+#include "dsp/devicesamplemimo.h"
+#include "dsp/dspdevicesourceengine.h"
+#include "dsp/dspdevicesinkengine.h"
+#include "dsp/dspdevicemimoengine.h"
 #include "dsp/dspengine.h"
-#include "channel/channelsourceapi.h"
-#include "channel/channelsinkapi.h"
+#include "channel/channelapi.h"
 #include "plugin/pluginapi.h"
 #include "plugin/pluginmanager.h"
+#include "util/serialutil.h"
+#include "webapi/webapiadapterbase.h"
 #include "webapiadaptersrv.h"
+
+#ifdef HAS_LIMERFEUSB
+#include "limerfe/limerfecontroller.h"
+#endif
 
 WebAPIAdapterSrv::WebAPIAdapterSrv(MainCore& mainCore) :
     m_mainCore(mainCore)
@@ -69,7 +83,7 @@ WebAPIAdapterSrv::~WebAPIAdapterSrv()
 
 int WebAPIAdapterSrv::instanceSummary(
         SWGSDRangel::SWGInstanceSummaryResponse& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
     *response.getAppname() = QCoreApplication::applicationName();
@@ -102,7 +116,7 @@ int WebAPIAdapterSrv::instanceSummary(
 
 int WebAPIAdapterSrv::instanceDelete(
         SWGSDRangel::SWGSuccessResponse& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     MainCore::MsgDeleteInstance *msg = MainCore::MsgDeleteInstance::create();
     m_mainCore.getInputMessageQueue()->push(msg);
@@ -113,28 +127,134 @@ int WebAPIAdapterSrv::instanceDelete(
     return 202;
 }
 
-int WebAPIAdapterSrv::instanceDevices(
-            bool tx,
-            SWGSDRangel::SWGInstanceDevicesResponse& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+int WebAPIAdapterSrv::instanceConfigGet(
+            SWGSDRangel::SWGInstanceConfigResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
-    int nbSamplingDevices = tx ? DeviceEnumerator::instance()->getNbTxSamplingDevices() : DeviceEnumerator::instance()->getNbRxSamplingDevices();
+    WebAPIAdapterBase webAPIAdapterBase;
+    webAPIAdapterBase.setPluginManager(m_mainCore.getPluginManager());
+    SWGSDRangel::SWGPreferences *preferences = response.getPreferences();
+    WebAPIAdapterBase::webapiFormatPreferences(preferences, m_mainCore.getMainSettings().getPreferences());
+    SWGSDRangel::SWGPreset *workingPreset = response.getWorkingPreset();
+    webAPIAdapterBase.webapiFormatPreset(workingPreset, m_mainCore.getMainSettings().getWorkingPresetConst());
+
+    int nbPresets = m_mainCore.m_settings.getPresetCount();
+    QList<SWGSDRangel::SWGPreset*> *swgPresets = response.getPresets();
+
+    for (int i = 0; i < nbPresets; i++)
+    {
+        const Preset *preset = m_mainCore.m_settings.getPreset(i);
+        swgPresets->append(new SWGSDRangel::SWGPreset);
+        webAPIAdapterBase.webapiFormatPreset(swgPresets->back(), *preset);
+    }
+
+    int nbCommands = m_mainCore.m_settings.getCommandCount();
+    QList<SWGSDRangel::SWGCommand*> *swgCommands = response.getCommands();
+
+    for (int i = 0; i < nbCommands; i++)
+    {
+        const Command *command = m_mainCore.m_settings.getCommand(i);
+        swgCommands->append(new SWGSDRangel::SWGCommand);
+        WebAPIAdapterBase::webapiFormatCommand(swgCommands->back(), *command);
+    }
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceConfigPutPatch(
+        bool force, // PUT else PATCH
+        SWGSDRangel::SWGInstanceConfigResponse& query,
+        const ConfigKeys& configKeys,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    WebAPIAdapterBase webAPIAdapterBase;
+    webAPIAdapterBase.setPluginManager(m_mainCore.getPluginManager());
+
+    if (force) {
+        webAPIAdapterBase.webapiInitConfig(m_mainCore.m_settings);
+    }
+
+    Preferences newPreferences = m_mainCore.m_settings.getPreferences();
+    webAPIAdapterBase.webapiUpdatePreferences(query.getPreferences(), configKeys.m_preferencesKeys, newPreferences);
+    m_mainCore.m_settings.setPreferences(newPreferences);
+
+    Preset *workingPreset = m_mainCore.m_settings.getWorkingPreset();
+    webAPIAdapterBase.webapiUpdatePreset(force, query.getWorkingPreset(), configKeys.m_workingPresetKeys, workingPreset);
+
+    QList<PresetKeys>::const_iterator presetKeysIt = configKeys.m_presetKeys.begin();
+    int i = 0;
+    for (; presetKeysIt != configKeys.m_presetKeys.end(); ++presetKeysIt, i++)
+    {
+        Preset *newPreset = new Preset(); // created with default values
+        SWGSDRangel::SWGPreset *swgPreset = query.getPresets()->at(i);
+        webAPIAdapterBase.webapiUpdatePreset(force, swgPreset, *presetKeysIt, newPreset);
+        m_mainCore.m_settings.addPreset(newPreset);
+    }
+
+    QList<CommandKeys>::const_iterator commandKeysIt = configKeys.m_commandKeys.begin();
+    i = 0;
+    for (; commandKeysIt != configKeys.m_commandKeys.end(); ++commandKeysIt, i++)
+    {
+        Command *newCommand = new Command(); // created with default values
+        SWGSDRangel::SWGCommand *swgCommand = query.getCommands()->at(i);
+        webAPIAdapterBase.webapiUpdateCommand(swgCommand, *commandKeysIt, *newCommand);
+        m_mainCore.m_settings.addCommand(newCommand);
+    }
+
+    MainCore::MsgApplySettings *msg = MainCore::MsgApplySettings::create();
+    m_mainCore.m_inputMessageQueue.push(msg);
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceDevices(
+            int direction,
+            SWGSDRangel::SWGInstanceDevicesResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+{
+    response.init();
+
+    int nbSamplingDevices;
+
+    if (direction == 0) { // Single Rx stream device
+        nbSamplingDevices = DeviceEnumerator::instance()->getNbRxSamplingDevices();
+    } else if (direction == 1) { // Single Tx stream device
+        nbSamplingDevices = DeviceEnumerator::instance()->getNbTxSamplingDevices();
+    } else if (direction == 2) { // MIMO device
+        nbSamplingDevices = DeviceEnumerator::instance()->getNbMIMOSamplingDevices();
+    } else { // not supported
+        nbSamplingDevices = 0;
+    }
+
+
     response.setDevicecount(nbSamplingDevices);
     QList<SWGSDRangel::SWGDeviceListItem*> *devices = response.getDevices();
 
     for (int i = 0; i < nbSamplingDevices; i++)
     {
-        PluginInterface::SamplingDevice samplingDevice = tx ? DeviceEnumerator::instance()->getTxSamplingDevice(i) : DeviceEnumerator::instance()->getRxSamplingDevice(i);
+        const PluginInterface::SamplingDevice *samplingDevice = nullptr;
+
+        if (direction == 0) {
+            samplingDevice = DeviceEnumerator::instance()->getRxSamplingDevice(i);
+        } else if (direction == 1) {
+            samplingDevice = DeviceEnumerator::instance()->getTxSamplingDevice(i);
+        } else if (direction == 2) {
+            samplingDevice = DeviceEnumerator::instance()->getMIMOSamplingDevice(i);
+        } else {
+            continue;
+        }
+
         devices->append(new SWGSDRangel::SWGDeviceListItem);
         devices->back()->init();
-        *devices->back()->getDisplayedName() = samplingDevice.displayedName;
-        *devices->back()->getHwType() = samplingDevice.hardwareId;
-        *devices->back()->getSerial() = samplingDevice.serial;
-        devices->back()->setSequence(samplingDevice.sequence);
-        devices->back()->setTx(!samplingDevice.rxElseTx);
-        devices->back()->setNbStreams(samplingDevice.deviceNbItems);
-        devices->back()->setDeviceSetIndex(samplingDevice.claimed);
+        *devices->back()->getDisplayedName() = samplingDevice->displayedName;
+        *devices->back()->getHwType() = samplingDevice->hardwareId;
+        *devices->back()->getSerial() = samplingDevice->serial;
+        devices->back()->setSequence(samplingDevice->sequence);
+        devices->back()->setDirection((int) samplingDevice->streamType);
+        devices->back()->setDeviceNbStreams(samplingDevice->deviceNbItems);
+        devices->back()->setDeviceSetIndex(samplingDevice->claimed);
         devices->back()->setIndex(i);
     }
 
@@ -142,13 +262,35 @@ int WebAPIAdapterSrv::instanceDevices(
 }
 
 int WebAPIAdapterSrv::instanceChannels(
-            bool tx,
+            int direction,
             SWGSDRangel::SWGInstanceChannelsResponse& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+            SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
-    PluginAPI::ChannelRegistrations *channelRegistrations = tx ? m_mainCore.m_pluginManager->getTxChannelRegistrations() : m_mainCore.m_pluginManager->getRxChannelRegistrations();
-    int nbChannelDevices = channelRegistrations->size();
+    PluginAPI::ChannelRegistrations *channelRegistrations;
+    int nbChannelDevices;
+
+    if (direction == 0) // Single sink (Rx) channel
+    {
+        channelRegistrations = m_mainCore.m_pluginManager->getRxChannelRegistrations();
+        nbChannelDevices = channelRegistrations->size();
+    }
+    else if (direction == 1) // Single source (Tx) channel
+    {
+        channelRegistrations = m_mainCore.m_pluginManager->getTxChannelRegistrations();
+        nbChannelDevices = channelRegistrations->size();
+    }
+    else if (direction == 2) // MIMO channel
+    {
+        channelRegistrations = m_mainCore.m_pluginManager->getMIMOChannelRegistrations();
+        nbChannelDevices = channelRegistrations->size();
+    }
+    else // not supported
+    {
+        channelRegistrations = nullptr;
+        nbChannelDevices = 0;
+    }
+
     response.setChannelcount(nbChannelDevices);
     QList<SWGSDRangel::SWGChannelListItem*> *channels = response.getChannels();
 
@@ -160,7 +302,7 @@ int WebAPIAdapterSrv::instanceChannels(
         const PluginDescriptor& pluginDescriptor = channelInterface->getPluginDescriptor();
         *channels->back()->getVersion() = pluginDescriptor.version;
         *channels->back()->getName() = pluginDescriptor.displayedName;
-        channels->back()->setTx(tx);
+        channels->back()->setDirection(direction);
         *channels->back()->getIdUri() = channelRegistrations->at(i).m_channelIdURI;
         *channels->back()->getId() = channelRegistrations->at(i).m_channelId;
         channels->back()->setIndex(i);
@@ -171,7 +313,7 @@ int WebAPIAdapterSrv::instanceChannels(
 
 int WebAPIAdapterSrv::instanceLoggingGet(
         SWGSDRangel::SWGLoggingInfo& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
     response.setDumpToFile(m_mainCore.m_logger->getUseFileLogger() ? 1 : 0);
@@ -189,7 +331,7 @@ int WebAPIAdapterSrv::instanceLoggingGet(
 int WebAPIAdapterSrv::instanceLoggingPut(
         SWGSDRangel::SWGLoggingInfo& query,
         SWGSDRangel::SWGLoggingInfo& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     // response input is the query actually
     bool dumpToFile = (query.getDumpToFile() != 0);
@@ -226,7 +368,7 @@ int WebAPIAdapterSrv::instanceLoggingPut(
 
 int WebAPIAdapterSrv::instanceAudioGet(
         SWGSDRangel::SWGAudioDevices& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     const QList<QAudioDeviceInfo>& audioInputDevices = m_mainCore.m_dspEngine->getAudioDeviceManager()->getInputDevices();
     const QList<QAudioDeviceInfo>& audioOutputDevices = m_mainCore.m_dspEngine->getAudioDeviceManager()->getOutputDevices();
@@ -373,6 +515,12 @@ int WebAPIAdapterSrv::instanceAudioOutputPatch(
     if (audioOutputKeys.contains("udpChannelMode")) {
         outputDeviceInfo.udpChannelMode = static_cast<AudioOutput::UDPChannelMode>(response.getUdpChannelMode() % 4);
     }
+    if (audioOutputKeys.contains("udpChannelCodec")) {
+        outputDeviceInfo.udpChannelCodec = static_cast<AudioOutput::UDPChannelCodec>(response.getUdpChannelCodec());
+    }
+    if (audioOutputKeys.contains("udpDecimationFactor")) {
+        outputDeviceInfo.udpDecimationFactor = response.getUdpDecimationFactor();
+    }
     if (audioOutputKeys.contains("udpAddress")) {
         outputDeviceInfo.udpAddress = *response.getUdpAddress();
     }
@@ -463,7 +611,7 @@ int WebAPIAdapterSrv::instanceAudioOutputDelete(
 
 int WebAPIAdapterSrv::instanceAudioInputCleanupPatch(
             SWGSDRangel::SWGSuccessResponse& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+            SWGSDRangel::SWGErrorResponse& error)
 {
     m_mainCore.m_dspEngine->getAudioDeviceManager()->inputInfosCleanup();
 
@@ -475,7 +623,7 @@ int WebAPIAdapterSrv::instanceAudioInputCleanupPatch(
 
 int WebAPIAdapterSrv::instanceAudioOutputCleanupPatch(
             SWGSDRangel::SWGSuccessResponse& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+            SWGSDRangel::SWGErrorResponse& error)
 {
     m_mainCore.m_dspEngine->getAudioDeviceManager()->outputInfosCleanup();
 
@@ -487,7 +635,7 @@ int WebAPIAdapterSrv::instanceAudioOutputCleanupPatch(
 
 int WebAPIAdapterSrv::instanceLocationGet(
         SWGSDRangel::SWGLocationInformation& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
     response.setLatitude(m_mainCore.m_settings.getLatitude());
@@ -498,7 +646,7 @@ int WebAPIAdapterSrv::instanceLocationGet(
 
 int WebAPIAdapterSrv::instanceLocationPut(
         SWGSDRangel::SWGLocationInformation& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     float latitude = response.getLatitude();
     float longitude = response.getLongitude();
@@ -516,8 +664,8 @@ int WebAPIAdapterSrv::instanceLocationPut(
 }
 
 int WebAPIAdapterSrv::instanceDVSerialGet(
-            SWGSDRangel::SWGDVSeralDevices& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+            SWGSDRangel::SWGDVSerialDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
 {
     response.init();
 
@@ -541,8 +689,8 @@ int WebAPIAdapterSrv::instanceDVSerialGet(
 
 int WebAPIAdapterSrv::instanceDVSerialPatch(
             bool dvserial,
-            SWGSDRangel::SWGDVSeralDevices& response,
-            SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+            SWGSDRangel::SWGDVSerialDevices& response,
+            SWGSDRangel::SWGErrorResponse& error)
 {
     m_mainCore.m_dspEngine->setDVSerialSupport(dvserial);
     response.init();
@@ -572,6 +720,321 @@ int WebAPIAdapterSrv::instanceDVSerialPatch(
 
     return 200;
 }
+
+int WebAPIAdapterSrv::instanceAMBESerialGet(
+        SWGSDRangel::SWGDVSerialDevices& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    (void) error;
+    response.init();
+
+    std::vector<std::string> deviceNames;
+    std::vector<QString> qDeviceNames;
+    m_mainCore.m_dspEngine->getAMBEEngine()->scan(qDeviceNames);
+
+    for (std::vector<QString>::const_iterator it = qDeviceNames.begin(); it != qDeviceNames.end(); ++it) {
+        deviceNames.push_back(it->toStdString());
+    }
+
+    response.setNbDevices((int) deviceNames.size());
+    QList<SWGSDRangel::SWGDVSerialDevice*> *deviceNamesList = response.getDvSerialDevices();
+
+    std::vector<std::string>::iterator it = deviceNames.begin();
+
+    while (it != deviceNames.end())
+    {
+        deviceNamesList->append(new SWGSDRangel::SWGDVSerialDevice);
+        deviceNamesList->back()->init();
+        *deviceNamesList->back()->getDeviceName() = QString::fromStdString(*it);
+        ++it;
+    }
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceAMBEDevicesGet(
+        SWGSDRangel::SWGAMBEDevices& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    (void) error;
+    response.init();
+
+    std::vector<std::string> deviceNames;
+    m_mainCore.m_dspEngine->getDVSerialNames(deviceNames);
+    response.setNbDevices((int) deviceNames.size());
+    QList<SWGSDRangel::SWGAMBEDevice*> *deviceNamesList = response.getAmbeDevices();
+
+    std::vector<std::string>::iterator it = deviceNames.begin();
+
+    while (it != deviceNames.end())
+    {
+        deviceNamesList->append(new SWGSDRangel::SWGAMBEDevice);
+        deviceNamesList->back()->init();
+        *deviceNamesList->back()->getDeviceRef() = QString::fromStdString(*it);
+        deviceNamesList->back()->setDelete(0);
+        ++it;
+    }
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceAMBEDevicesDelete(
+            SWGSDRangel::SWGSuccessResponse& response,
+            SWGSDRangel::SWGErrorResponse& error)
+{
+    (void) error;
+    m_mainCore.m_dspEngine->getAMBEEngine()->releaseAll();
+
+    response.init();
+    *response.getMessage() = QString("All AMBE devices released");
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceAMBEDevicesPut(
+        SWGSDRangel::SWGAMBEDevices& query,
+        SWGSDRangel::SWGAMBEDevices& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    m_mainCore.m_dspEngine->getAMBEEngine()->releaseAll();
+
+    QList<SWGSDRangel::SWGAMBEDevice *> *ambeList = query.getAmbeDevices();
+
+    for (QList<SWGSDRangel::SWGAMBEDevice *>::const_iterator it = ambeList->begin(); it != ambeList->end(); ++it) {
+        m_mainCore.m_dspEngine->getAMBEEngine()->registerController((*it)->getDeviceRef()->toStdString());
+    }
+
+    instanceAMBEDevicesGet(response, error);
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceAMBEDevicesPatch(
+        SWGSDRangel::SWGAMBEDevices& query,
+        SWGSDRangel::SWGAMBEDevices& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    QList<SWGSDRangel::SWGAMBEDevice *> *ambeList = query.getAmbeDevices();
+
+    for (QList<SWGSDRangel::SWGAMBEDevice *>::const_iterator it = ambeList->begin(); it != ambeList->end(); ++it)
+    {
+        if ((*it)->getDelete()) {
+            m_mainCore.m_dspEngine->getAMBEEngine()->releaseController((*it)->getDeviceRef()->toStdString());
+        } else {
+            m_mainCore.m_dspEngine->getAMBEEngine()->registerController((*it)->getDeviceRef()->toStdString());
+        }
+    }
+
+    instanceAMBEDevicesGet(response, error);
+    return 200;
+}
+
+#ifdef HAS_LIMERFEUSB
+int WebAPIAdapterSrv::instanceLimeRFESerialGet(
+        SWGSDRangel::SWGLimeRFEDevices& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    (void) error;
+    std::vector<std::string> comPorts;
+    SerialUtil::getComPorts(comPorts, "ttyUSB[0-9]+"); // regex is for Linux only
+    response.setNbDevices((int) comPorts.size());
+    QList<SWGSDRangel::SWGLimeRFEDevice*> *deviceNamesList = response.getLimeRfeDevices();
+    std::vector<std::string>::iterator it = comPorts.begin();
+
+    while (it != comPorts.end())
+    {
+        deviceNamesList->append(new SWGSDRangel::SWGLimeRFEDevice);
+        deviceNamesList->back()->init();
+        *deviceNamesList->back()->getDeviceRef() = QString::fromStdString(*it);
+        ++it;
+    }
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceLimeRFEConfigGet(
+        const QString& serial,
+        SWGSDRangel::SWGLimeRFESettings& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    LimeRFEController controller;
+    int rc = controller.openDevice(serial.toStdString());
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error opening LimeRFE device %1: %2")
+            .arg(serial).arg(controller.getError(rc).c_str());
+        return 400;
+    }
+
+    rc = controller.getState();
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error getting config from LimeRFE device %1: %2")
+            .arg(serial).arg(controller.getError(rc).c_str());
+        return 500;
+    }
+
+    controller.closeDevice();
+
+    LimeRFEController::LimeRFESettings settings;
+    controller.stateToSettings(settings);
+    response.init();
+    response.setDevicePath(new QString(serial));
+    response.setRxChannels((int) settings.m_rxChannels);
+    response.setRxWidebandChannel((int) settings.m_rxWidebandChannel);
+    response.setRxHamChannel((int) settings.m_rxHAMChannel);
+    response.setRxCellularChannel((int) settings.m_rxCellularChannel);
+    response.setRxPort((int) settings.m_rxPort);
+    response.setRxOn(settings.m_rxOn ? 1 : 0);
+    response.setAmfmNotch(settings.m_amfmNotch ? 1 : 0);
+    response.setAttenuationFactor(settings.m_attenuationFactor);
+    response.setTxChannels((int) settings.m_txChannels);
+    response.setTxWidebandChannel((int) settings.m_txWidebandChannel);
+    response.setTxHamChannel((int) settings.m_txHAMChannel);
+    response.setTxCellularChannel((int) settings.m_txCellularChannel);
+    response.setTxPort((int) settings.m_txPort);
+    response.setTxOn(settings.m_txOn ? 1 : 0);
+    response.setSwrEnable(settings.m_swrEnable ? 1 : 0);
+    response.setSwrSource((int) settings.m_swrSource);
+
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceLimeRFEConfigPut(
+        SWGSDRangel::SWGLimeRFESettings& query,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    LimeRFEController controller;
+    int rc = controller.openDevice(query.getDevicePath()->toStdString());
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error opening LimeRFE device %1: %2")
+            .arg(*query.getDevicePath()).arg(controller.getError(rc).c_str());
+        return 400;
+    }
+
+    LimeRFEController::LimeRFESettings settings;
+    settings.m_rxChannels = (LimeRFEController::ChannelGroups) query.getRxChannels();
+    settings.m_rxWidebandChannel = (LimeRFEController::WidebandChannel) query.getRxWidebandChannel();
+    settings.m_rxHAMChannel = (LimeRFEController::HAMChannel) query.getRxHamChannel();
+    settings.m_rxCellularChannel = (LimeRFEController::CellularChannel) query.getRxCellularChannel();
+    settings.m_rxPort = (LimeRFEController::RxPort) query.getRxPort();
+    settings.m_rxOn = query.getRxOn() != 0;
+    settings.m_amfmNotch = query.getAmfmNotch() != 0;
+    settings.m_attenuationFactor = query.getAttenuationFactor();
+    settings.m_txChannels = (LimeRFEController::ChannelGroups) query.getTxChannels();
+    settings.m_txWidebandChannel = (LimeRFEController::WidebandChannel) query.getTxWidebandChannel();
+    settings.m_txHAMChannel = (LimeRFEController::HAMChannel) query.getTxHamChannel();
+    settings.m_txCellularChannel = (LimeRFEController::CellularChannel) query.getTxCellularChannel();
+    settings.m_txPort = (LimeRFEController::TxPort) query.getTxPort();
+    settings.m_txOn = query.getTxOn() != 0;
+    settings.m_swrEnable = query.getSwrEnable() != 0;
+    settings.m_swrSource = (LimeRFEController::SWRSource) query.getSwrSource();
+
+    controller.settingsToState(settings);
+
+    rc = controller.configure();
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error configuring LimeRFE device %1: %2")
+            .arg(*query.getDevicePath()).arg(controller.getError(rc).c_str());
+        return 500;
+    }
+
+    response.init();
+    *response.getMessage() = QString("LimeRFE device at %1 configuration updated successfully").arg(*query.getDevicePath());
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceLimeRFERunPut(
+        SWGSDRangel::SWGLimeRFESettings& query,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    LimeRFEController controller;
+    int rc = controller.openDevice(query.getDevicePath()->toStdString());
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error opening LimeRFE device %1: %2")
+            .arg(*query.getDevicePath()).arg(controller.getError(rc).c_str());
+        return 400;
+    }
+
+    LimeRFEController::LimeRFESettings settings;
+    settings.m_rxOn = query.getRxOn() != 0;
+    settings.m_txOn = query.getTxOn() != 0;
+
+    rc = controller.setRx(settings, settings.m_rxOn);
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error setting Rx/Tx LimeRFE device %1: %2")
+            .arg(*query.getDevicePath()).arg(controller.getError(rc).c_str());
+        return 400;
+    }
+
+    response.init();
+    *response.getMessage() = QString("LimeRFE device at %1 mode updated successfully").arg(*query.getDevicePath());
+    return 200;
+}
+
+int WebAPIAdapterSrv::instanceLimeRFEPowerGet(
+        const QString& serial,
+        SWGSDRangel::SWGLimeRFEPower& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    LimeRFEController controller;
+    int rc = controller.openDevice(serial.toStdString());
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error opening LimeRFE device %1: %2")
+            .arg(serial).arg(controller.getError(rc).c_str());
+        return 400;
+    }
+
+    int fwdPower;
+    rc = controller.getFwdPower(fwdPower);
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error getting forward power from LimeRFE device %1: %2")
+            .arg(serial).arg(controller.getError(rc).c_str());
+        return 500;
+    }
+
+    int refPower;
+    rc = controller.getRefPower(refPower);
+
+    if (rc != 0)
+    {
+        error.init();
+        *error.getMessage() = QString("Error getting reflected power from LimeRFE device %1: %2")
+            .arg(serial).arg(controller.getError(rc).c_str());
+        return 500;
+    }
+
+    controller.closeDevice();
+
+    response.init();
+    response.setForward(fwdPower);
+    response.setReflected(refPower);
+    return 200;
+}
+#endif
 
 int WebAPIAdapterSrv::instancePresetFilePut(
             SWGSDRangel::SWGPresetImport& query,
@@ -605,7 +1068,7 @@ int WebAPIAdapterSrv::instancePresetFilePut(
             response.init();
             response.setCenterFrequency(preset->getCenterFrequency());
             *response.getGroupName() = preset->getGroup();
-            *response.getType() = preset->isSourcePreset() ? "R" : "T";
+            *response.getType() = preset->isSourcePreset() ? "R" : preset->isSinkPreset() ? "T" : preset->isMIMOPreset() ? "M" : "X";
             *response.getName() = preset->getDescription();
 
             return 200;
@@ -635,15 +1098,17 @@ int WebAPIAdapterSrv::instancePresetFilePost(
 
     const Preset *selectedPreset = m_mainCore.m_settings.getPreset(*presetIdentifier->getGroupName(),
             presetIdentifier->getCenterFrequency(),
-            *presetIdentifier->getName());
+            *presetIdentifier->getName(),
+            *presetIdentifier->getType());
 
     if (selectedPreset == 0)
     {
         error.init();
-        *error.getMessage() = QString("There is no preset [%1, %2, %3]")
+        *error.getMessage() = QString("There is no preset [%1, %2, %3, %4]")
                 .arg(*presetIdentifier->getGroupName())
                 .arg(presetIdentifier->getCenterFrequency())
-                .arg(*presetIdentifier->getName());
+                .arg(*presetIdentifier->getName())
+                .arg(*presetIdentifier->getType());
         return 404;
     }
 
@@ -668,7 +1133,7 @@ int WebAPIAdapterSrv::instancePresetFilePost(
             response.init();
             response.setCenterFrequency(selectedPreset->getCenterFrequency());
             *response.getGroupName() = selectedPreset->getGroup();
-            *response.getType() = selectedPreset->isSourcePreset() ? "R" : "T";
+            *response.getType() = selectedPreset->isSourcePreset() ? "R" : selectedPreset->isSinkPreset() ? "T" : selectedPreset->isMIMOPreset() ? "M" : "X";
             *response.getName() = selectedPreset->getDescription();
 
             return 200;
@@ -690,7 +1155,7 @@ int WebAPIAdapterSrv::instancePresetFilePost(
 
 int WebAPIAdapterSrv::instancePresetsGet(
         SWGSDRangel::SWGPresets& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     int nbPresets = m_mainCore.m_settings.getPresetCount();
     int nbGroups = 0;
@@ -722,7 +1187,7 @@ int WebAPIAdapterSrv::instancePresetsGet(
         swgPresets->append(new SWGSDRangel::SWGPresetItem);
         swgPresets->back()->init();
         swgPresets->back()->setCenterFrequency(preset->getCenterFrequency());
-        *swgPresets->back()->getType() = preset->isSourcePreset() ? "R" : "T";
+        *swgPresets->back()->getType() = preset->isSourcePreset() ? "R" : preset->isSinkPreset() ? "T" : preset->isMIMOPreset() ? "M" : "X";
         *swgPresets->back()->getName() = preset->getDescription();
         nbPresetsThisGroup++;
     }
@@ -751,15 +1216,17 @@ int WebAPIAdapterSrv::instancePresetPatch(
 
     const Preset *selectedPreset = m_mainCore.m_settings.getPreset(*presetIdentifier->getGroupName(),
             presetIdentifier->getCenterFrequency(),
-            *presetIdentifier->getName());
+            *presetIdentifier->getName(),
+            *presetIdentifier->getType());
 
     if (selectedPreset == 0)
     {
         error.init();
-        *error.getMessage() = QString("There is no preset [%1, %2, %3]")
+        *error.getMessage() = QString("There is no preset [%1, %2, %3 %4]")
                 .arg(*presetIdentifier->getGroupName())
                 .arg(presetIdentifier->getCenterFrequency())
-                .arg(*presetIdentifier->getName());
+                .arg(*presetIdentifier->getName())
+                .arg(*presetIdentifier->getType());
         return 404;
     }
 
@@ -768,14 +1235,21 @@ int WebAPIAdapterSrv::instancePresetPatch(
     if (deviceSet->m_deviceSourceEngine && !selectedPreset->isSourcePreset())
     {
         error.init();
-        *error.getMessage() = QString("Preset type (T) and device set type (Rx) mismatch");
+        *error.getMessage() = QString("Preset type and device set type (Rx) mismatch");
         return 404;
     }
 
-    if (deviceSet->m_deviceSinkEngine && selectedPreset->isSourcePreset())
+    if (deviceSet->m_deviceSinkEngine && !selectedPreset->isSinkPreset())
     {
         error.init();
-        *error.getMessage() = QString("Preset type (R) and device set type (Tx) mismatch");
+        *error.getMessage() = QString("Preset type and device set type (Tx) mismatch");
+        return 404;
+    }
+
+    if (deviceSet->m_deviceMIMOEngine && !selectedPreset->isMIMOPreset())
+    {
+        error.init();
+        *error.getMessage() = QString("Preset type and device set type (MIMO) mismatch");
         return 404;
     }
 
@@ -785,7 +1259,7 @@ int WebAPIAdapterSrv::instancePresetPatch(
     response.init();
     response.setCenterFrequency(selectedPreset->getCenterFrequency());
     *response.getGroupName() = selectedPreset->getGroup();
-    *response.getType() = selectedPreset->isSourcePreset() ? "R" : "T";
+    *response.getType() = selectedPreset->isSourcePreset() ? "R" : selectedPreset->isSinkPreset() ? "T" : selectedPreset->isMIMOPreset() ? "M" : "X";
     *response.getName() = selectedPreset->getDescription();
 
     return 202;
@@ -809,15 +1283,17 @@ int WebAPIAdapterSrv::instancePresetPut(
 
     const Preset *selectedPreset = m_mainCore.m_settings.getPreset(*presetIdentifier->getGroupName(),
             presetIdentifier->getCenterFrequency(),
-            *presetIdentifier->getName());
+            *presetIdentifier->getName(),
+            *presetIdentifier->getType());
 
     if (selectedPreset == 0)
     {
         error.init();
-        *error.getMessage() = QString("There is no preset [%1, %2, %3]")
+        *error.getMessage() = QString("There is no preset [%1, %2, %3 %4]")
                 .arg(*presetIdentifier->getGroupName())
                 .arg(presetIdentifier->getCenterFrequency())
-                .arg(*presetIdentifier->getName());
+                .arg(*presetIdentifier->getName())
+                .arg(*presetIdentifier->getType());
         return 404;
     }
     else // update existing preset
@@ -827,14 +1303,21 @@ int WebAPIAdapterSrv::instancePresetPut(
         if (deviceSet->m_deviceSourceEngine && !selectedPreset->isSourcePreset())
         {
             error.init();
-            *error.getMessage() = QString("Preset type (T) and device set type (Rx) mismatch");
+            *error.getMessage() = QString("Preset type and device set type (Rx) mismatch");
             return 404;
         }
 
-        if (deviceSet->m_deviceSinkEngine && selectedPreset->isSourcePreset())
+        if (deviceSet->m_deviceSinkEngine && !selectedPreset->isSinkPreset())
         {
             error.init();
-            *error.getMessage() = QString("Preset type (R) and device set type (Tx) mismatch");
+            *error.getMessage() = QString("Preset type and device set type (Tx) mismatch");
+            return 404;
+        }
+
+        if (deviceSet->m_deviceSinkEngine && !selectedPreset->isMIMOPreset())
+        {
+            error.init();
+            *error.getMessage() = QString("Preset type and device set type (MIMO) mismatch");
             return 404;
         }
     }
@@ -845,7 +1328,7 @@ int WebAPIAdapterSrv::instancePresetPut(
     response.init();
     response.setCenterFrequency(selectedPreset->getCenterFrequency());
     *response.getGroupName() = selectedPreset->getGroup();
-    *response.getType() = selectedPreset->isSourcePreset() ? "R" : "T";
+    *response.getType() = selectedPreset->isSourcePreset() ? "R" : selectedPreset->isSinkPreset() ? "T": selectedPreset->isMIMOPreset() ? "M" : "X";
     *response.getName() = selectedPreset->getDescription();
 
     return 202;
@@ -869,14 +1352,17 @@ int WebAPIAdapterSrv::instancePresetPost(
 
     DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
     int deviceCenterFrequency = 0;
-    bool isSourcePreset;
+    int presetTypeCode;
 
     if (deviceSet->m_deviceSourceEngine) { // Rx
         deviceCenterFrequency = deviceSet->m_deviceSourceEngine->getSource()->getCenterFrequency();
-        isSourcePreset = true;
+        presetTypeCode = 0;
     } else if (deviceSet->m_deviceSinkEngine) { // Tx
         deviceCenterFrequency = deviceSet->m_deviceSinkEngine->getSink()->getCenterFrequency();
-        isSourcePreset = false;
+        presetTypeCode = 1;
+    } else if (deviceSet->m_deviceMIMOEngine) { // MIMO
+        deviceCenterFrequency = deviceSet->m_deviceMIMOEngine->getMIMO()->getMIMOCenterFrequency();
+        presetTypeCode = 2;
     } else {
         error.init();
         *error.getMessage() = QString("Device set error");
@@ -885,7 +1371,8 @@ int WebAPIAdapterSrv::instancePresetPost(
 
     const Preset *selectedPreset = m_mainCore.m_settings.getPreset(*presetIdentifier->getGroupName(),
             deviceCenterFrequency,
-            *presetIdentifier->getName());
+            *presetIdentifier->getName(),
+            *presetIdentifier->getType());
 
     if (selectedPreset == 0) // save on a new preset
     {
@@ -894,10 +1381,11 @@ int WebAPIAdapterSrv::instancePresetPost(
     else
     {
         error.init();
-        *error.getMessage() = QString("Preset already exists [%1, %2, %3]")
+        *error.getMessage() = QString("Preset already exists [%1, %2, %3 %4]")
                 .arg(*presetIdentifier->getGroupName())
                 .arg(deviceCenterFrequency)
-                .arg(*presetIdentifier->getName());
+                .arg(*presetIdentifier->getName())
+                .arg(*presetIdentifier->getType());
         return 409;
     }
 
@@ -907,7 +1395,7 @@ int WebAPIAdapterSrv::instancePresetPost(
     response.init();
     response.setCenterFrequency(deviceCenterFrequency);
     *response.getGroupName() = selectedPreset->getGroup();
-    *response.getType() = isSourcePreset ? "R" : "T";
+    *response.getType() = presetTypeCode == 0 ? "R" : presetTypeCode == 1 ? "T" : presetTypeCode == 2 ? "M" : "X";
     *response.getName() = selectedPreset->getDescription();
 
     return 202;
@@ -919,21 +1407,23 @@ int WebAPIAdapterSrv::instancePresetDelete(
 {
     const Preset *selectedPreset = m_mainCore.m_settings.getPreset(*response.getGroupName(),
             response.getCenterFrequency(),
-            *response.getName());
+            *response.getName(),
+            *response.getType());
 
     if (selectedPreset == 0)
     {
         error.init();
-        *error.getMessage() = QString("There is no preset [%1, %2, %3]")
+        *error.getMessage() = QString("There is no preset [%1, %2, %3 %4]")
                 .arg(*response.getGroupName())
                 .arg(response.getCenterFrequency())
-                .arg(*response.getName());
+                .arg(*response.getName())
+                .arg(*response.getType());
         return 404;
     }
 
     response.setCenterFrequency(selectedPreset->getCenterFrequency());
     *response.getGroupName() = selectedPreset->getGroup();
-    *response.getType() = selectedPreset->isSourcePreset() ? "R" : "T";
+    *response.getType() = selectedPreset->isSourcePreset() ? "R" : selectedPreset->isSinkPreset() ? "T" : selectedPreset->isMIMOPreset() ? "M" : "X";
     *response.getName() = selectedPreset->getDescription();
 
     MainCore::MsgDeletePreset *msg = MainCore::MsgDeletePreset::create(const_cast<Preset*>(selectedPreset));
@@ -944,18 +1434,18 @@ int WebAPIAdapterSrv::instancePresetDelete(
 
 int WebAPIAdapterSrv::instanceDeviceSetsGet(
         SWGSDRangel::SWGDeviceSetList& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
     getDeviceSetList(&response);
     return 200;
 }
 
 int WebAPIAdapterSrv::instanceDeviceSetPost(
-        bool tx,
+        int direction,
         SWGSDRangel::SWGSuccessResponse& response,
-        SWGSDRangel::SWGErrorResponse& error __attribute__((unused)))
+        SWGSDRangel::SWGErrorResponse& error)
 {
-    MainCore::MsgAddDeviceSet *msg = MainCore::MsgAddDeviceSet::create(tx);
+    MainCore::MsgAddDeviceSet *msg = MainCore::MsgAddDeviceSet::create(direction);
     m_mainCore.m_inputMessageQueue.push(msg);
 
     response.init();
@@ -1009,8 +1499,8 @@ int WebAPIAdapterSrv::devicesetGet(
 }
 
 int WebAPIAdapterSrv::devicesetFocusPatch(
-        int deviceSetIndex __attribute__((unused)),
-        SWGSDRangel::SWGSuccessResponse& response __attribute__((unused)),
+        int deviceSetIndex,
+        SWGSDRangel::SWGSuccessResponse& response,
         SWGSDRangel::SWGErrorResponse& error)
 {
     *error.getMessage() = QString("Not supported in server instance");
@@ -1027,58 +1517,95 @@ int WebAPIAdapterSrv::devicesetDevicePut(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if ((query.getTx() == 0) && (deviceSet->m_deviceSinkEngine))
+        if ((query.getDirection() != 1) && (deviceSet->m_deviceSinkEngine))
         {
             error.init();
-            *error.getMessage() = QString("Device type (Rx) and device set type (Tx) mismatch");
+            *error.getMessage() = QString("Device type and device set type (Tx) mismatch");
             return 404;
         }
 
-        if ((query.getTx() != 0) && (deviceSet->m_deviceSourceEngine))
+        if ((query.getDirection() != 0) && (deviceSet->m_deviceSourceEngine))
         {
             error.init();
-            *error.getMessage() = QString("Device type (Tx) and device set type (Rx) mismatch");
+            *error.getMessage() = QString("Device type and device set type (Rx) mismatch");
             return 404;
         }
 
-        int nbSamplingDevices = query.getTx() != 0 ? DeviceEnumerator::instance()->getNbTxSamplingDevices() : DeviceEnumerator::instance()->getNbRxSamplingDevices();
-        int tx = query.getTx();
+        if ((query.getDirection() != 2) && (deviceSet->m_deviceMIMOEngine))
+        {
+            error.init();
+            *error.getMessage() = QString("Device type and device set type (MIMO) mismatch");
+            return 404;
+        }
+
+        int nbSamplingDevices;
+
+        if (query.getDirection() == 0) {
+            nbSamplingDevices = DeviceEnumerator::instance()->getNbRxSamplingDevices();
+        } else if (query.getDirection() == 1) {
+            nbSamplingDevices = DeviceEnumerator::instance()->getNbTxSamplingDevices();
+        } else if (query.getDirection() == 2) {
+            nbSamplingDevices = DeviceEnumerator::instance()->getNbMIMOSamplingDevices();
+        } else {
+            nbSamplingDevices = 0; // TODO: not implemented yet
+        }
 
         for (int i = 0; i < nbSamplingDevices; i++)
         {
-            PluginInterface::SamplingDevice samplingDevice = query.getTx() ? DeviceEnumerator::instance()->getTxSamplingDevice(i) : DeviceEnumerator::instance()->getRxSamplingDevice(i);
+            int direction;
+            const PluginInterface::SamplingDevice *samplingDevice;
 
-            if (query.getDisplayedName() && (*query.getDisplayedName() != samplingDevice.displayedName)) {
+            if (query.getDirection() == 0)
+            {
+                direction = 0;
+                samplingDevice = DeviceEnumerator::instance()->getRxSamplingDevice(i);
+            }
+            else if (query.getDirection() == 1)
+            {
+                direction = 1;
+                samplingDevice = DeviceEnumerator::instance()->getTxSamplingDevice(i);
+            }
+            else if (query.getDirection() == 2)
+            {
+                direction = 2;
+                samplingDevice = DeviceEnumerator::instance()->getMIMOSamplingDevice(i);
+            }
+            else
+            {
+                continue; // device not supported
+            }
+
+            if (query.getDisplayedName() && (*query.getDisplayedName() != samplingDevice->displayedName)) {
                 continue;
             }
 
-            if (query.getHwType() && (*query.getHwType() != samplingDevice.hardwareId)) {
+            if (query.getHwType() && (*query.getHwType() != samplingDevice->hardwareId)) {
                 continue;
             }
 
-            if ((query.getSequence() >= 0) && (query.getSequence() != samplingDevice.sequence)) {
+            if ((query.getSequence() >= 0) && (query.getSequence() != samplingDevice->sequence)) {
                 continue;
             }
 
-            if (query.getSerial() && (*query.getSerial() != samplingDevice.serial)) {
+            if (query.getSerial() && (*query.getSerial() != samplingDevice->serial)) {
                 continue;
             }
 
-            if ((query.getStreamIndex() >= 0) && (query.getStreamIndex() != samplingDevice.deviceItemIndex)) {
+            if ((query.getDeviceStreamIndex() >= 0) && (query.getDeviceStreamIndex() != samplingDevice->deviceItemIndex)) {
                 continue;
             }
 
-            MainCore::MsgSetDevice *msg = MainCore::MsgSetDevice::create(deviceSetIndex, i, query.getTx() != 0);
+            MainCore::MsgSetDevice *msg = MainCore::MsgSetDevice::create(deviceSetIndex, i, query.getDirection());
             m_mainCore.m_inputMessageQueue.push(msg);
 
             response.init();
-            *response.getDisplayedName() = samplingDevice.displayedName;
-            *response.getHwType() = samplingDevice.hardwareId;
-            *response.getSerial() = samplingDevice.serial;
-            response.setSequence(samplingDevice.sequence);
-            response.setTx(tx);
-            response.setNbStreams(samplingDevice.deviceNbItems);
-            response.setStreamIndex(samplingDevice.deviceItemIndex);
+            *response.getDisplayedName() = samplingDevice->displayedName;
+            *response.getHwType() = samplingDevice->hardwareId;
+            *response.getSerial() = samplingDevice->serial;
+            response.setSequence(samplingDevice->sequence);
+            response.setDirection(direction);
+            response.setDeviceNbStreams(samplingDevice->deviceNbItems);
+            response.setDeviceStreamIndex(samplingDevice->deviceItemIndex);
             response.setDeviceSetIndex(deviceSetIndex);
             response.setIndex(i);
 
@@ -1109,19 +1636,130 @@ int WebAPIAdapterSrv::devicesetDeviceSettingsGet(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
         {
-            response.setDeviceHwType(new QString(deviceSet->m_deviceSourceAPI->getHardwareId()));
-            response.setTx(0);
-            DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(0);
+            DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
             return source->webapiSettingsGet(response, *error.getMessage());
         }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
         {
-            response.setDeviceHwType(new QString(deviceSet->m_deviceSinkAPI->getHardwareId()));
-            response.setTx(1);
-            DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(1);
+            DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
             return sink->webapiSettingsGet(response, *error.getMessage());
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(2);
+            DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+            return mimo->webapiSettingsGet(response, *error.getMessage());
+        }
+        else
+        {
+            *error.getMessage() = QString("DeviceSet error");
+            return 500;
+        }
+    }
+    else
+    {
+        *error.getMessage() = QString("There is no device set with index %1").arg(deviceSetIndex);
+        return 404;
+    }
+}
+
+int WebAPIAdapterSrv::devicesetDeviceActionsPost(
+        int deviceSetIndex,
+        const QStringList& deviceActionsKeys,
+        SWGSDRangel::SWGDeviceActions& query,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    error.init();
+
+    if ((deviceSetIndex >= 0) && (deviceSetIndex < (int) m_mainCore.m_deviceSets.size()))
+    {
+        DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
+
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
+        {
+            if (query.getDirection() != 0)
+            {
+                *error.getMessage() = QString("Single Rx device found but other type of device requested");
+                return 400;
+            }
+            if (deviceSet->m_deviceAPI->getHardwareId() != *query.getDeviceHwType())
+            {
+                *error.getMessage() = QString("Device mismatch. Found %1 input").arg(deviceSet->m_deviceAPI->getHardwareId());
+                return 400;
+            }
+            else
+            {
+                DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
+                int res = source->webapiActionsPost(deviceActionsKeys, query, *error.getMessage());
+
+                if (res/100 == 2)
+                {
+                    response.init();
+                    *response.getMessage() = QString("Message to post action was submitted successfully");
+                }
+
+                return res;
+            }
+        }
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
+        {
+            if (query.getDirection() != 1)
+            {
+                *error.getMessage() = QString("Single Tx device found but other type of device requested");
+                return 400;
+            }
+            else if (deviceSet->m_deviceAPI->getHardwareId() != *query.getDeviceHwType())
+            {
+                *error.getMessage() = QString("Device mismatch. Found %1 output").arg(deviceSet->m_deviceAPI->getHardwareId());
+                return 400;
+            }
+            else
+            {
+                DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
+                int res = sink->webapiActionsPost(deviceActionsKeys, query, *error.getMessage());
+
+                if (res/100 == 2)
+                {
+                    response.init();
+                    *response.getMessage() = QString("Message to post action was submitted successfully");
+                }
+
+                return res;
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            if (query.getDirection() != 2)
+            {
+                *error.getMessage() = QString("MIMO device found but other type of device requested");
+                return 400;
+            }
+            else if (deviceSet->m_deviceAPI->getHardwareId() != *query.getDeviceHwType())
+            {
+                *error.getMessage() = QString("Device mismatch. Found %1 output").arg(deviceSet->m_deviceAPI->getHardwareId());
+                return 400;
+            }
+            else
+            {
+                DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+                int res = mimo->webapiActionsPost(deviceActionsKeys, query, *error.getMessage());
+
+                if (res/100 == 2)
+                {
+                    response.init();
+                    *response.getMessage() = QString("Message to post action was submitted successfully");
+                }
+
+                return res;
+            }
         }
         else
         {
@@ -1149,40 +1787,58 @@ int WebAPIAdapterSrv::devicesetDeviceSettingsPutPatch(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
         {
-            if (response.getTx() != 0)
+            if (response.getDirection() != 0)
             {
-                *error.getMessage() = QString("Rx device found but Tx device requested");
+                *error.getMessage() = QString("Single Rx device found but other type of device requested");
                 return 400;
             }
-            if (deviceSet->m_deviceSourceAPI->getHardwareId() != *response.getDeviceHwType())
+            if (deviceSet->m_deviceAPI->getHardwareId() != *response.getDeviceHwType())
             {
-                *error.getMessage() = QString("Device mismatch. Found %1 input").arg(deviceSet->m_deviceSourceAPI->getHardwareId());
+                *error.getMessage() = QString("Device mismatch. Found %1 input").arg(deviceSet->m_deviceAPI->getHardwareId());
                 return 400;
             }
             else
             {
-                DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+                DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
                 return source->webapiSettingsPutPatch(force, deviceSettingsKeys, response, *error.getMessage());
             }
         }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
         {
-            if (response.getTx() == 0)
+            if (response.getDirection() != 1)
             {
-                *error.getMessage() = QString("Tx device found but Rx device requested");
+                *error.getMessage() = QString("Single Tx device found but other type of device requested");
                 return 400;
             }
-            else if (deviceSet->m_deviceSinkAPI->getHardwareId() != *response.getDeviceHwType())
+            else if (deviceSet->m_deviceAPI->getHardwareId() != *response.getDeviceHwType())
             {
-                *error.getMessage() = QString("Device mismatch. Found %1 output").arg(deviceSet->m_deviceSinkAPI->getHardwareId());
+                *error.getMessage() = QString("Device mismatch. Found %1 output").arg(deviceSet->m_deviceAPI->getHardwareId());
                 return 400;
             }
             else
             {
-                DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+                DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
                 return sink->webapiSettingsPutPatch(force, deviceSettingsKeys, response, *error.getMessage());
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            if (response.getDirection() != 2)
+            {
+                *error.getMessage() = QString("MIMO device found but other type of device requested");
+                return 400;
+            }
+            else if (deviceSet->m_deviceAPI->getHardwareId() != *response.getDeviceHwType())
+            {
+                *error.getMessage() = QString("Device mismatch. Found %1 output").arg(deviceSet->m_deviceAPI->getHardwareId());
+                return 400;
+            }
+            else
+            {
+                DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+                return mimo->webapiSettingsPutPatch(force, deviceSettingsKeys, response, *error.getMessage());
             }
         }
         else
@@ -1211,15 +1867,46 @@ int WebAPIAdapterSrv::devicesetDeviceRunGet(
 
         if (deviceSet->m_deviceSourceEngine) // Rx
         {
-            DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+            DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
             response.init();
             return source->webapiRunGet(response, *error.getMessage());
         }
         else if (deviceSet->m_deviceSinkEngine) // Tx
         {
-            DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+            DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
             response.init();
             return sink->webapiRunGet(response, *error.getMessage());
+        }
+        else
+        {
+            *error.getMessage() = QString("DeviceSet error");
+            return 500;
+        }
+    }
+    else
+    {
+        *error.getMessage() = QString("There is no device set with index %1").arg(deviceSetIndex);
+        return 404;
+    }
+}
+
+int WebAPIAdapterSrv::devicesetDeviceSubsystemRunGet(
+        int deviceSetIndex,
+        int subsystemIndex,
+        SWGSDRangel::SWGDeviceState& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    error.init();
+
+    if ((deviceSetIndex >= 0) && (deviceSetIndex < (int) m_mainCore.m_deviceSets.size()))
+    {
+        DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
+
+        if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+            response.init();
+            return mimo->webapiRunGet(subsystemIndex, response, *error.getMessage());
         }
         else
         {
@@ -1247,15 +1934,46 @@ int WebAPIAdapterSrv::devicesetDeviceRunPost(
 
         if (deviceSet->m_deviceSourceEngine) // Rx
         {
-            DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+            DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
             response.init();
             return source->webapiRun(true, response, *error.getMessage());
         }
         else if (deviceSet->m_deviceSinkEngine) // Tx
         {
-            DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+            DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
             response.init();
             return sink->webapiRun(true, response, *error.getMessage());
+        }
+        else
+        {
+            *error.getMessage() = QString("DeviceSet error");
+            return 500;
+        }
+    }
+    else
+    {
+        *error.getMessage() = QString("There is no device set with index %1").arg(deviceSetIndex);
+        return 404;
+    }
+}
+
+int WebAPIAdapterSrv::devicesetDeviceSubsystemRunPost(
+        int deviceSetIndex,
+        int subsystemIndex,
+        SWGSDRangel::SWGDeviceState& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    error.init();
+
+    if ((deviceSetIndex >= 0) && (deviceSetIndex < (int) m_mainCore.m_deviceSets.size()))
+    {
+        DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
+
+        if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+            response.init();
+            return mimo->webapiRun(true, subsystemIndex, response, *error.getMessage());
         }
         else
         {
@@ -1283,15 +2001,46 @@ int WebAPIAdapterSrv::devicesetDeviceRunDelete(
 
         if (deviceSet->m_deviceSourceEngine) // Rx
         {
-            DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+            DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
             response.init();
             return source->webapiRun(false, response, *error.getMessage());
        }
         else if (deviceSet->m_deviceSinkEngine) // Tx
         {
-            DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+            DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
             response.init();
             return sink->webapiRun(false, response, *error.getMessage());
+        }
+        else
+        {
+            *error.getMessage() = QString("DeviceSet error");
+            return 500;
+        }
+    }
+    else
+    {
+        *error.getMessage() = QString("There is no device set with index %1").arg(deviceSetIndex);
+        return 404;
+    }
+}
+
+int WebAPIAdapterSrv::devicesetDeviceSubsystemRunDelete(
+        int deviceSetIndex,
+        int subsystemIndex,
+        SWGSDRangel::SWGDeviceState& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    error.init();
+
+    if ((deviceSetIndex >= 0) && (deviceSetIndex < (int) m_mainCore.m_deviceSets.size()))
+    {
+        DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
+
+        if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+            response.init();
+            return mimo->webapiRun(false, subsystemIndex, response, *error.getMessage());
         }
         else
         {
@@ -1317,19 +2066,26 @@ int WebAPIAdapterSrv::devicesetDeviceReportGet(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
         {
-            response.setDeviceHwType(new QString(deviceSet->m_deviceSourceAPI->getHardwareId()));
-            response.setTx(0);
-            DeviceSampleSource *source = deviceSet->m_deviceSourceAPI->getSampleSource();
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(0);
+            DeviceSampleSource *source = deviceSet->m_deviceAPI->getSampleSource();
             return source->webapiReportGet(response, *error.getMessage());
         }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
         {
-            response.setDeviceHwType(new QString(deviceSet->m_deviceSinkAPI->getHardwareId()));
-            response.setTx(1);
-            DeviceSampleSink *sink = deviceSet->m_deviceSinkAPI->getSampleSink();
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(1);
+            DeviceSampleSink *sink = deviceSet->m_deviceAPI->getSampleSink();
             return sink->webapiReportGet(response, *error.getMessage());
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            response.setDeviceHwType(new QString(deviceSet->m_deviceAPI->getHardwareId()));
+            response.setDirection(2);
+            DeviceSampleMIMO *mimo = deviceSet->m_deviceAPI->getSampleMIMO();
+            return mimo->webapiReportGet(response, *error.getMessage());
         }
         else
         {
@@ -1375,12 +2131,12 @@ int WebAPIAdapterSrv::devicesetChannelPost(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (query.getTx() == 0) // Rx
+        if (query.getDirection() == 0) // Single Rx
         {
-            if (deviceSet->m_deviceSourceEngine == 0)
+            if (!deviceSet->m_deviceSourceEngine && !deviceSet->m_deviceMIMOEngine)
             {
                 error.init();
-                *error.getMessage() = QString("Device set at %1 is not a receive device set").arg(deviceSetIndex);
+                *error.getMessage() = QString("Device set at %1 is not a receive capable device set").arg(deviceSetIndex);
                 return 400;
             }
 
@@ -1411,12 +2167,12 @@ int WebAPIAdapterSrv::devicesetChannelPost(
                 return 404;
             }
         }
-        else // Tx
+        else if (query.getDirection() == 1) // single Tx
         {
-            if (deviceSet->m_deviceSinkEngine == 0)
+            if (!deviceSet->m_deviceSinkEngine && !deviceSet->m_deviceMIMOEngine)
             {
                 error.init();
-                *error.getMessage() = QString("Device set at %1 is not a transmit device set").arg(deviceSetIndex);
+                *error.getMessage() = QString("Device set at %1 is not a transmit capable device set").arg(deviceSetIndex);
                 return 400;
             }
 
@@ -1447,6 +2203,48 @@ int WebAPIAdapterSrv::devicesetChannelPost(
                 return 404;
             }
         }
+        else if (query.getDirection() == 2) // MIMO
+        {
+            if (!deviceSet->m_deviceMIMOEngine)
+            {
+                error.init();
+                *error.getMessage() = QString("Device set at %1 is not a MIMO capable device set").arg(deviceSetIndex);
+                return 400;
+            }
+
+            PluginAPI::ChannelRegistrations *channelRegistrations = m_mainCore.m_pluginManager->getMIMOChannelRegistrations();
+            int nbRegistrations = channelRegistrations->size();
+            int index = 0;
+            for (; index < nbRegistrations; index++)
+            {
+                if (channelRegistrations->at(index).m_channelId == *query.getChannelType()) {
+                    break;
+                }
+            }
+
+            if (index < nbRegistrations)
+            {
+            	MainCore::MsgAddChannel *msg = MainCore::MsgAddChannel::create(deviceSetIndex, index, true);
+                m_mainCore.m_inputMessageQueue.push(msg);
+
+                response.init();
+                *response.getMessage() = QString("Message to add a channel (MsgAddChannel) was submitted successfully");
+
+                return 202;
+            }
+            else
+            {
+                error.init();
+                *error.getMessage() = QString("There is no MIMO channel with id %1").arg(*query.getChannelType());
+                return 404;
+            }
+        }
+        else
+        {
+            error.init();
+            *error.getMessage() = QString("This type of device is not implemented yet");
+            return 400;
+        }
     }
     else
     {
@@ -1466,53 +2264,23 @@ int WebAPIAdapterSrv::devicesetChannelDelete(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (channelIndex < deviceSet->getNumberOfChannels())
         {
-            if (channelIndex < deviceSet->getNumberOfRxChannels())
-            {
-                MainCore::MsgDeleteChannel *msg = MainCore::MsgDeleteChannel::create(deviceSetIndex, channelIndex, false);
-                m_mainCore.m_inputMessageQueue.push(msg);
+            MainCore::MsgDeleteChannel *msg = MainCore::MsgDeleteChannel::create(deviceSetIndex, channelIndex);
+            m_mainCore.m_inputMessageQueue.push(msg);
 
-                response.init();
-                *response.getMessage() = QString("Message to delete a channel (MsgDeleteChannel) was submitted successfully");
+            response.init();
+            *response.getMessage() = QString("Message to delete a channel (MsgDeleteChannel) was submitted successfully");
 
-                return 202;
-            }
-            else
-            {
-                error.init();
-                *error.getMessage() = QString("There is no channel at index %1. There are %2 Rx channels")
-                        .arg(channelIndex)
-                        .arg(channelIndex < deviceSet->getNumberOfRxChannels());
-                return 400;
-            }
-        }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
-        {
-            if (channelIndex < deviceSet->getNumberOfTxChannels())
-            {
-                MainCore::MsgDeleteChannel *msg = MainCore::MsgDeleteChannel::create(deviceSetIndex, channelIndex, true);
-                m_mainCore.m_inputMessageQueue.push(msg);
-
-                response.init();
-                *response.getMessage() = QString("Message to delete a channel (MsgDeleteChannel) was submitted successfully");
-
-                return 202;
-            }
-            else
-            {
-                error.init();
-                *error.getMessage() = QString("There is no channel at index %1. There are %2 Tx channels")
-                        .arg(channelIndex)
-                        .arg(channelIndex < deviceSet->getNumberOfRxChannels());
-                return 400;
-            }
+            return 202;
         }
         else
         {
             error.init();
-            *error.getMessage() = QString("DeviceSet error");
-            return 500;
+            *error.getMessage() = QString("There is no channel at index %1. There are %2 channels")
+                    .arg(channelIndex)
+                    .arg(channelIndex < deviceSet->getNumberOfChannels());
+            return 400;
         }
     }
     else
@@ -1535,9 +2303,9 @@ int WebAPIAdapterSrv::devicesetChannelSettingsGet(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
         {
-            ChannelSinkAPI *channelAPI = deviceSet->m_deviceSourceAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1548,13 +2316,13 @@ int WebAPIAdapterSrv::devicesetChannelSettingsGet(
             {
                 response.setChannelType(new QString());
                 channelAPI->getIdentifier(*response.getChannelType());
-                response.setTx(0);
+                response.setDirection(0);
                 return channelAPI->webapiSettingsGet(response, *error.getMessage());
             }
         }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
         {
-            ChannelSourceAPI *channelAPI = deviceSet->m_deviceSinkAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1565,8 +2333,48 @@ int WebAPIAdapterSrv::devicesetChannelSettingsGet(
             {
                 response.setChannelType(new QString());
                 channelAPI->getIdentifier(*response.getChannelType());
-                response.setTx(1);
+                response.setDirection(1);
                 return channelAPI->webapiSettingsGet(response, *error.getMessage());
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+            int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+            int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+            ChannelAPI *channelAPI = nullptr;
+
+            if (channelIndex < nbSinkChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
+                response.setDirection(0);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex - nbSinkChannels);
+                response.setDirection(1);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels + nbMIMOChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(channelIndex - nbSinkChannels - nbSourceChannels);
+                response.setDirection(2);
+            }
+            else
+            {
+                *error.getMessage() = QString("Ther is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+
+            if (channelAPI)
+            {
+                response.setChannelType(new QString());
+                channelAPI->getIdentifier(*response.getChannelType());
+                return channelAPI->webapiSettingsGet(response, *error.getMessage());
+            }
+            else
+            {
+                *error.getMessage() = QString("Ther is no channel with index %1").arg(channelIndex);
+                return 404;
             }
         }
         else
@@ -1594,9 +2402,9 @@ int WebAPIAdapterSrv::devicesetChannelReportGet(
     {
         DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
 
-        if (deviceSet->m_deviceSourceEngine) // Rx
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
         {
-            ChannelSinkAPI *channelAPI = deviceSet->m_deviceSourceAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1607,13 +2415,13 @@ int WebAPIAdapterSrv::devicesetChannelReportGet(
             {
                 response.setChannelType(new QString());
                 channelAPI->getIdentifier(*response.getChannelType());
-                response.setTx(0);
+                response.setDirection(0);
                 return channelAPI->webapiReportGet(response, *error.getMessage());
             }
         }
-        else if (deviceSet->m_deviceSinkEngine) // Tx
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
         {
-            ChannelSourceAPI *channelAPI = deviceSet->m_deviceSinkAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1624,8 +2432,203 @@ int WebAPIAdapterSrv::devicesetChannelReportGet(
             {
                 response.setChannelType(new QString());
                 channelAPI->getIdentifier(*response.getChannelType());
-                response.setTx(1);
+                response.setDirection(1);
                 return channelAPI->webapiReportGet(response, *error.getMessage());
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+            int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+            int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+            ChannelAPI *channelAPI = nullptr;
+
+            if (channelIndex < nbSinkChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
+                response.setDirection(0);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex - nbSinkChannels);
+                response.setDirection(1);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels + nbMIMOChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(channelIndex - nbSinkChannels - nbSourceChannels);
+                response.setDirection(2);
+            }
+            else
+            {
+                *error.getMessage() = QString("Ther is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+
+            if (channelAPI)
+            {
+                response.setChannelType(new QString());
+                channelAPI->getIdentifier(*response.getChannelType());
+                return channelAPI->webapiReportGet(response, *error.getMessage());
+            }
+            else
+            {
+                *error.getMessage() = QString("Ther is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+        }
+        else
+        {
+            *error.getMessage() = QString("DeviceSet error");
+            return 500;
+        }
+    }
+    else
+    {
+        *error.getMessage() = QString("There is no device set with index %1").arg(deviceSetIndex);
+        return 404;
+    }
+}
+
+int WebAPIAdapterSrv::devicesetChannelActionsPost(
+        int deviceSetIndex,
+        int channelIndex,
+        const QStringList& channelActionsKeys,
+        SWGSDRangel::SWGChannelActions& query,
+        SWGSDRangel::SWGSuccessResponse& response,
+        SWGSDRangel::SWGErrorResponse& error)
+{
+    error.init();
+
+    if ((deviceSetIndex >= 0) && (deviceSetIndex < (int) m_mainCore.m_deviceSets.size()))
+    {
+        DeviceSet *deviceSet = m_mainCore.m_deviceSets[deviceSetIndex];
+
+        if (deviceSet->m_deviceSourceEngine) // Single Rx
+        {
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
+
+            if (channelAPI == 0)
+            {
+                *error.getMessage() = QString("There is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+            else
+            {
+                QString channelType;
+                channelAPI->getIdentifier(channelType);
+
+                if (channelType == *query.getChannelType())
+                {
+                    int res = channelAPI->webapiActionsPost(channelActionsKeys, query, *error.getMessage());
+
+                    if (res/100 == 2)
+                    {
+                        response.init();
+                        *response.getMessage() = QString("Message to post action was submitted successfully");
+                    }
+
+                    return res;
+                }
+                else
+                {
+                    *error.getMessage() = QString("There is no channel type %1 at index %2. Found %3.")
+                            .arg(*query.getChannelType())
+                            .arg(channelIndex)
+                            .arg(channelType);
+                    return 404;
+                }
+            }
+        }
+        else if (deviceSet->m_deviceSinkEngine) // Single Tx
+        {
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex);
+
+            if (channelAPI == 0)
+            {
+                *error.getMessage() = QString("There is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+            else
+            {
+                QString channelType;
+                channelAPI->getIdentifier(channelType);
+
+                if (channelType == *query.getChannelType())
+                {
+                    int res = channelAPI->webapiActionsPost(channelActionsKeys, query, *error.getMessage());
+
+                    if (res/100 == 2)
+                    {
+                        response.init();
+                        *response.getMessage() = QString("Message to post action was submitted successfully");
+                    }
+
+                    return res;
+                }
+                else
+                {
+                    *error.getMessage() = QString("There is no channel type %1 at index %2. Found %3.")
+                            .arg(*query.getChannelType())
+                            .arg(channelIndex)
+                            .arg(channelType);
+                    return 404;
+                }
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+            int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+            int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+            ChannelAPI *channelAPI = nullptr;
+
+            if ((query.getDirection() == 0) && (channelIndex < nbSinkChannels))
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
+            }
+            else if ((query.getDirection() == 1) && (channelIndex < nbSinkChannels + nbSourceChannels))
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex - nbSinkChannels);
+            }
+            else if ((query.getDirection() == 2) && (channelIndex < nbSinkChannels + nbSourceChannels + nbMIMOChannels))
+            {
+                channelAPI = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(channelIndex - nbSinkChannels - nbSourceChannels);
+            }
+            else
+            {
+                *error.getMessage() = QString("here is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+
+            if (channelAPI)
+            {
+                QString channelType;
+                channelAPI->getIdentifier(channelType);
+
+                if (channelType == *query.getChannelType())
+                {
+                    int res = channelAPI->webapiActionsPost(channelActionsKeys, query, *error.getMessage());
+                    if (res/100 == 2)
+                    {
+                        response.init();
+                        *response.getMessage() = QString("Message to post action was submitted successfully");
+                    }
+
+                    return res;
+                }
+                else
+                {
+                    *error.getMessage() = QString("There is no channel type %1 at index %2. Found %3.")
+                            .arg(*query.getChannelType())
+                            .arg(channelIndex)
+                            .arg(channelType);
+                    return 404;
+                }
+            }
+            else
+            {
+                *error.getMessage() = QString("There is no channel with index %1").arg(channelIndex);
+                return 404;
             }
         }
         else
@@ -1657,7 +2660,7 @@ int WebAPIAdapterSrv::devicesetChannelSettingsPutPatch(
 
         if (deviceSet->m_deviceSourceEngine) // Rx
         {
-            ChannelSinkAPI *channelAPI = deviceSet->m_deviceSourceAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1685,7 +2688,7 @@ int WebAPIAdapterSrv::devicesetChannelSettingsPutPatch(
         }
         else if (deviceSet->m_deviceSinkEngine) // Tx
         {
-            ChannelSourceAPI *channelAPI = deviceSet->m_deviceSinkAPI->getChanelAPIAt(channelIndex);
+            ChannelAPI *channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex);
 
             if (channelAPI == 0)
             {
@@ -1709,6 +2712,58 @@ int WebAPIAdapterSrv::devicesetChannelSettingsPutPatch(
                             .arg(channelType);
                     return 404;
                 }
+            }
+        }
+        else if (deviceSet->m_deviceMIMOEngine) // MIMO
+        {
+            int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+            int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+            int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+            ChannelAPI *channelAPI = nullptr;
+
+            if (channelIndex < nbSinkChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSinkAPIAt(channelIndex);
+                response.setDirection(0);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getChanelSourceAPIAt(channelIndex - nbSinkChannels);
+                response.setDirection(1);
+            }
+            else if (channelIndex < nbSinkChannels + nbSourceChannels + nbMIMOChannels)
+            {
+                channelAPI = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(channelIndex - nbSinkChannels - nbSourceChannels);
+                response.setDirection(2);
+            }
+            else
+            {
+                *error.getMessage() = QString("here is no channel with index %1").arg(channelIndex);
+                return 404;
+            }
+
+            if (channelAPI)
+            {
+                QString channelType;
+                channelAPI->getIdentifier(channelType);
+
+                if (channelType == *response.getChannelType())
+                {
+                    return channelAPI->webapiSettingsPutPatch(force, channelSettingsKeys, response, *error.getMessage());
+                }
+                else
+                {
+                    *error.getMessage() = QString("There is no channel type %1 at index %2. Found %3.")
+                            .arg(*response.getChannelType())
+                            .arg(channelIndex)
+                            .arg(channelType);
+                    return 404;
+                }
+            }
+            else
+            {
+                *error.getMessage() = QString("There is no channel with index %1").arg(channelIndex);
+                return 404;
             }
         }
         else
@@ -1746,16 +2801,16 @@ void WebAPIAdapterSrv::getDeviceSet(SWGSDRangel::SWGDeviceSet *swgDeviceSet, con
     SWGSDRangel::SWGSamplingDevice *samplingDevice = swgDeviceSet->getSamplingDevice();
     samplingDevice->init();
     samplingDevice->setIndex(deviceUISetIndex);
-    samplingDevice->setTx(deviceSet->m_deviceSinkEngine != 0);
 
-    if (deviceSet->m_deviceSinkEngine) // Tx data
+    if (deviceSet->m_deviceSinkEngine) // Single Tx data
     {
-        *samplingDevice->getHwType() = deviceSet->m_deviceSinkAPI->getHardwareId();
-        *samplingDevice->getSerial() = deviceSet->m_deviceSinkAPI->getSampleSinkSerial();
-        samplingDevice->setSequence(deviceSet->m_deviceSinkAPI->getSampleSinkSequence());
-        samplingDevice->setNbStreams(deviceSet->m_deviceSinkAPI->getNbItems());
-        samplingDevice->setStreamIndex(deviceSet->m_deviceSinkAPI->getItemIndex());
-        deviceSet->m_deviceSinkAPI->getDeviceEngineStateStr(*samplingDevice->getState());
+        samplingDevice->setDirection(1);
+        *samplingDevice->getHwType() = deviceSet->m_deviceAPI->getHardwareId();
+        *samplingDevice->getSerial() = deviceSet->m_deviceAPI->getSamplingDeviceSerial();
+        samplingDevice->setSequence(deviceSet->m_deviceAPI->getSamplingDeviceSequence());
+        samplingDevice->setDeviceNbStreams(deviceSet->m_deviceAPI->getDeviceNbItems());
+        samplingDevice->setDeviceStreamIndex(deviceSet->m_deviceAPI->getDeviceItemIndex());
+        deviceSet->m_deviceAPI->getDeviceEngineStateStr(*samplingDevice->getState());
         DeviceSampleSink *sampleSink = deviceSet->m_deviceSinkEngine->getSink();
 
         if (sampleSink) {
@@ -1763,15 +2818,16 @@ void WebAPIAdapterSrv::getDeviceSet(SWGSDRangel::SWGDeviceSet *swgDeviceSet, con
             samplingDevice->setBandwidth(sampleSink->getSampleRate());
         }
 
-        swgDeviceSet->setChannelcount(deviceSet->m_deviceSinkAPI->getNbChannels());
+        swgDeviceSet->setChannelcount(deviceSet->m_deviceAPI->getNbSourceChannels());
         QList<SWGSDRangel::SWGChannel*> *channels = swgDeviceSet->getChannels();
 
         for (int i = 0; i <  swgDeviceSet->getChannelcount(); i++)
         {
             channels->append(new SWGSDRangel::SWGChannel);
             channels->back()->init();
-            ChannelSourceAPI *channel = deviceSet->m_deviceSinkAPI->getChanelAPIAt(i);
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSourceAPIAt(i);
             channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(1);
             channels->back()->setIndex(channel->getIndexInDeviceSet());
             channels->back()->setUid(channel->getUID());
             channel->getIdentifier(*channels->back()->getId());
@@ -1779,14 +2835,15 @@ void WebAPIAdapterSrv::getDeviceSet(SWGSDRangel::SWGDeviceSet *swgDeviceSet, con
         }
     }
 
-    if (deviceSet->m_deviceSourceEngine) // Rx data
+    if (deviceSet->m_deviceSourceEngine) // Single Rx data
     {
-        *samplingDevice->getHwType() = deviceSet->m_deviceSourceAPI->getHardwareId();
-        *samplingDevice->getSerial() = deviceSet->m_deviceSourceAPI->getSampleSourceSerial();
-        samplingDevice->setSequence(deviceSet->m_deviceSourceAPI->getSampleSourceSequence());
-        samplingDevice->setNbStreams(deviceSet->m_deviceSourceAPI->getNbItems());
-        samplingDevice->setStreamIndex(deviceSet->m_deviceSourceAPI->getItemIndex());
-        deviceSet->m_deviceSourceAPI->getDeviceEngineStateStr(*samplingDevice->getState());
+        samplingDevice->setDirection(0);
+        *samplingDevice->getHwType() = deviceSet->m_deviceAPI->getHardwareId();
+        *samplingDevice->getSerial() = deviceSet->m_deviceAPI->getSamplingDeviceSerial();
+        samplingDevice->setSequence(deviceSet->m_deviceAPI->getSamplingDeviceSequence());
+        samplingDevice->setDeviceNbStreams(deviceSet->m_deviceAPI->getDeviceNbItems());
+        samplingDevice->setDeviceStreamIndex(deviceSet->m_deviceAPI->getDeviceItemIndex());
+        deviceSet->m_deviceAPI->getDeviceEngineStateStr(*samplingDevice->getState());
         DeviceSampleSource *sampleSource = deviceSet->m_deviceSourceEngine->getSource();
 
         if (sampleSource) {
@@ -1794,15 +2851,81 @@ void WebAPIAdapterSrv::getDeviceSet(SWGSDRangel::SWGDeviceSet *swgDeviceSet, con
             samplingDevice->setBandwidth(sampleSource->getSampleRate());
         }
 
-        swgDeviceSet->setChannelcount(deviceSet->m_deviceSourceAPI->getNbChannels());
+        swgDeviceSet->setChannelcount(deviceSet->m_deviceAPI->getNbSinkChannels());
         QList<SWGSDRangel::SWGChannel*> *channels = swgDeviceSet->getChannels();
 
         for (int i = 0; i <  swgDeviceSet->getChannelcount(); i++)
         {
             channels->append(new SWGSDRangel::SWGChannel);
             channels->back()->init();
-            ChannelSinkAPI *channel = deviceSet->m_deviceSourceAPI->getChanelAPIAt(i);
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSinkAPIAt(i);
             channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(0);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+        }
+    }
+
+    if (deviceSet->m_deviceMIMOEngine) // MIMO data
+    {
+        samplingDevice->setDirection(2);
+        *samplingDevice->getHwType() = deviceSet->m_deviceAPI->getHardwareId();
+        *samplingDevice->getSerial() = deviceSet->m_deviceAPI->getSamplingDeviceSerial();
+        samplingDevice->setSequence(deviceSet->m_deviceAPI->getSamplingDeviceSequence());
+        samplingDevice->setDeviceNbStreams(deviceSet->m_deviceAPI->getDeviceNbItems());
+        samplingDevice->setDeviceStreamIndex(deviceSet->m_deviceAPI->getDeviceItemIndex());
+        samplingDevice->setState(new QString("notStarted"));
+        deviceSet->m_deviceAPI->getDeviceEngineStateStr(*samplingDevice->getStateRx(), 0);
+        deviceSet->m_deviceAPI->getDeviceEngineStateStr(*samplingDevice->getStateTx(), 1);
+        DeviceSampleMIMO *sampleMIMO = deviceSet->m_deviceMIMOEngine->getMIMO();
+
+        if (sampleMIMO)
+        {
+            samplingDevice->setCenterFrequency(sampleMIMO->getMIMOCenterFrequency());
+            samplingDevice->setBandwidth(sampleMIMO->getMIMOSampleRate());
+        }
+
+        int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+        int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+        int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+        swgDeviceSet->setChannelcount(nbSinkChannels + nbSourceChannels + nbMIMOChannels);
+        QList<SWGSDRangel::SWGChannel*> *channels = swgDeviceSet->getChannels();
+
+        for (int i = 0; i < nbSinkChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSinkAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(0);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+        }
+
+        for (int i = 0; i < nbSourceChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSourceAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(1);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+        }
+
+        for (int i = 0; i < nbMIMOChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(2);
             channels->back()->setIndex(channel->getIndexInDeviceSet());
             channels->back()->setUid(channel->getUID());
             channel->getIdentifier(*channels->back()->getId());
@@ -1819,15 +2942,16 @@ void WebAPIAdapterSrv::getChannelsDetail(SWGSDRangel::SWGChannelsDetail *channel
 
     if (deviceSet->m_deviceSinkEngine) // Tx data
     {
-        channelsDetail->setChannelcount(deviceSet->m_deviceSinkAPI->getNbChannels());
+        channelsDetail->setChannelcount(deviceSet->m_deviceAPI->getNbSourceChannels());
         QList<SWGSDRangel::SWGChannel*> *channels = channelsDetail->getChannels();
 
         for (int i = 0; i <  channelsDetail->getChannelcount(); i++)
         {
             channels->append(new SWGSDRangel::SWGChannel);
             channels->back()->init();
-            ChannelSourceAPI *channel = deviceSet->m_deviceSinkAPI->getChanelAPIAt(i);
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSourceAPIAt(i);
             channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(1);
             channels->back()->setIndex(channel->getIndexInDeviceSet());
             channels->back()->setUid(channel->getUID());
             channel->getIdentifier(*channels->back()->getId());
@@ -1845,15 +2969,88 @@ void WebAPIAdapterSrv::getChannelsDetail(SWGSDRangel::SWGChannelsDetail *channel
 
     if (deviceSet->m_deviceSourceEngine) // Rx data
     {
-        channelsDetail->setChannelcount(deviceSet->m_deviceSourceAPI->getNbChannels());
+        channelsDetail->setChannelcount(deviceSet->m_deviceAPI->getNbSinkChannels());
         QList<SWGSDRangel::SWGChannel*> *channels = channelsDetail->getChannels();
 
         for (int i = 0; i <  channelsDetail->getChannelcount(); i++)
         {
             channels->append(new SWGSDRangel::SWGChannel);
             channels->back()->init();
-            ChannelSinkAPI *channel = deviceSet->m_deviceSourceAPI->getChanelAPIAt(i);
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSinkAPIAt(i);
             channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(0);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+
+            channelReport = new SWGSDRangel::SWGChannelReport();
+
+            if (channel->webapiReportGet(*channelReport, channelReportError) != 501) {
+                channels->back()->setReport(channelReport);
+            } else {
+                delete channelReport;
+            }
+        }
+    }
+
+    if (deviceSet->m_deviceMIMOEngine) // MIMO data
+    {
+        int nbSinkChannels = deviceSet->m_deviceAPI->getNbSinkChannels();
+        int nbSourceChannels = deviceSet->m_deviceAPI->getNbSourceChannels();
+        int nbMIMOChannels = deviceSet->m_deviceAPI->getNbMIMOChannels();
+        QList<SWGSDRangel::SWGChannel*> *channels = channelsDetail->getChannels();
+        channelsDetail->setChannelcount(nbSinkChannels + nbSourceChannels + nbMIMOChannels);
+
+        for (int i = 0; i < nbSinkChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSinkAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(0);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+
+            channelReport = new SWGSDRangel::SWGChannelReport();
+
+            if (channel->webapiReportGet(*channelReport, channelReportError) != 501) {
+                channels->back()->setReport(channelReport);
+            } else {
+                delete channelReport;
+            }
+        }
+
+        for (int i = 0; i <  nbSourceChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getChanelSourceAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(1);
+            channels->back()->setIndex(channel->getIndexInDeviceSet());
+            channels->back()->setUid(channel->getUID());
+            channel->getIdentifier(*channels->back()->getId());
+            channel->getTitle(*channels->back()->getTitle());
+
+            channelReport = new SWGSDRangel::SWGChannelReport();
+
+            if (channel->webapiReportGet(*channelReport, channelReportError) != 501) {
+                channels->back()->setReport(channelReport);
+            } else {
+                delete channelReport;
+            }
+        }
+
+        for (int i = 0; i <  nbMIMOChannels; i++)
+        {
+            channels->append(new SWGSDRangel::SWGChannel);
+            channels->back()->init();
+            ChannelAPI *channel = deviceSet->m_deviceAPI->getMIMOChannelAPIAt(i);
+            channels->back()->setDeltaFrequency(channel->getCenterFrequency());
+            channels->back()->setDirection(2);
             channels->back()->setIndex(channel->getIndexInDeviceSet());
             channels->back()->setUid(channel->getUID());
             channel->getIdentifier(*channels->back()->getId());

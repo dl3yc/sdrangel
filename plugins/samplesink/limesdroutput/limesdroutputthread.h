@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,11 +24,11 @@
 
 #include "lime/LimeSuite.h"
 
-#include "dsp/samplesourcefifo.h"
 #include "dsp/interpolators.h"
 #include "limesdr/devicelimesdrshared.h"
+#include "limesdr/devicelimesdr.h"
 
-#define LIMESDROUTPUT_BLOCKSIZE (1<<15) //complex samples per buffer ~10k (16k)
+class SampleSourceFifo;
 
 class LimeSDROutputThread : public QThread, public DeviceLimeSDRShared::ThreadInterface
 {
@@ -49,7 +50,7 @@ private:
     bool m_running;
 
     lms_stream_t* m_stream;
-    qint16 m_buf[2*LIMESDROUTPUT_BLOCKSIZE]; //must hold I+Q values of each sample hence 2xcomplex size
+    qint16 m_buf[2*DeviceLimeSDR::blockSize]; //must hold I+Q values of each sample hence 2xcomplex size
     SampleSourceFifo* m_sampleFifo;
 
     unsigned int m_log2Interp; // soft decimation
@@ -58,6 +59,7 @@ private:
 
     void run();
     void callback(qint16* buf, qint32 len);
+    void callbackPart(qint16* buf, SampleVector& data, unsigned int iBegin, unsigned int iEnd);
 };
 
 

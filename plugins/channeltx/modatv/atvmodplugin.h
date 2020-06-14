@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,7 +21,7 @@
 #include <QObject>
 #include "plugin/plugininterface.h"
 
-class DeviceSinkAPI;
+class DeviceAPI;
 class BasebandSampleSource;
 
 class ATVModPlugin : public QObject, PluginInterface {
@@ -34,9 +35,10 @@ public:
     const PluginDescriptor& getPluginDescriptor() const;
     void initPlugin(PluginAPI* pluginAPI);
 
-    virtual PluginInstanceGUI* createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel);
-    virtual BasebandSampleSource* createTxChannelBS(DeviceSinkAPI *deviceAPI);
-    virtual ChannelSourceAPI* createTxChannelCS(DeviceSinkAPI *deviceAPI);
+    virtual PluginInstanceGUI* createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const;
+    virtual BasebandSampleSource* createTxChannelBS(DeviceAPI *deviceAPI) const;
+    virtual ChannelAPI* createTxChannelCS(DeviceAPI *deviceAPI) const;
+    virtual ChannelWebAPIAdapter* createChannelWebAPIAdapter() const;
 
 private:
     static const PluginDescriptor m_pluginDescriptor;

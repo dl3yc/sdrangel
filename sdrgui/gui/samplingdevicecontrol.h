@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,14 +31,12 @@ namespace Ui {
 
 class ChannelMarker;
 class PluginManager;
-class DeviceSourceAPI;
-class DeviceSinkAPI;
 
 class SDRGUI_API SamplingDeviceControl : public QWidget {
     Q_OBJECT
 
 public:
-    explicit SamplingDeviceControl(int tabIndex, bool rxElseTx, QWidget* parent = 0);
+    explicit SamplingDeviceControl(int tabIndex, int deviceType, QWidget* parent = 0);
     ~SamplingDeviceControl();
 
     int getSelectedDeviceIndex() const { return m_selectedDeviceIndex; }
@@ -56,7 +55,7 @@ private:
     Ui::SamplingDeviceControl* ui;
     PluginManager *m_pluginManager;
     int m_deviceTabIndex;
-    bool m_rxElseTx;
+    int m_deviceType;
     int m_selectedDeviceIndex;
 
 signals:

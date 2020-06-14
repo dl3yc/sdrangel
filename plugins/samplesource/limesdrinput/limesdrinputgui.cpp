@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,6 +19,7 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include <algorithm>
 
@@ -28,7 +30,7 @@
 #include "gui/basicdevicesettingsdialog.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 
 LimeSDRInputGUI::LimeSDRInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
@@ -36,14 +38,15 @@ LimeSDRInputGUI::LimeSDRInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
     ui(new Ui::LimeSDRInputGUI),
     m_deviceUISet(deviceUISet),
     m_settings(),
+    m_sampleRateMode(true),
     m_sampleRate(0),
-    m_lastEngineState(DSPDeviceSourceEngine::StNotStarted),
+    m_lastEngineState(DeviceAPI::StNotStarted),
     m_doApplySettings(true),
     m_forceSettings(true),
     m_statusCounter(0),
     m_deviceStatusCounter(0)
 {
-    m_limeSDRInput = (LimeSDRInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_limeSDRInput = (LimeSDRInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
     ui->setupUi(this);
 
@@ -68,8 +71,22 @@ LimeSDRInputGUI::LimeSDRInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
 
     ui->channelNumberText->setText(tr("#%1").arg(m_limeSDRInput->getChannelIndex()));
 
-    ui->hwDecimLabel->setText(QString::fromUtf8("H\u2193"));
-    ui->swDecimLabel->setText(QString::fromUtf8("S\u2193"));
+    if (m_limeSDRInput->getLimeType() == DeviceLimeSDRParams::LimeMini)
+    {
+        ui->antenna->setItemText(2, "NC");
+        ui->antenna->setItemText(3, "Lo");
+        ui->antenna->setItemText(4, "NC");
+        ui->antenna->setItemText(5, "NC");
+        ui->antenna->setToolTip("Antenna select: No: none, NC: not connected, Hi: 2 - 3.5 GHz, Lo: 10 MHz - 2 GHz");
+    }
+    else
+    {
+        ui->antenna->setItemText(2, "Lo");
+        ui->antenna->setItemText(3, "Wi");
+        ui->antenna->setItemText(4, "T1");
+        ui->antenna->setItemText(4, "T2");
+        ui->antenna->setToolTip("Antenna select: No: none, NC: not connected, Hi: >1.5 GHz, Lo: <1.5 GHz Wi: full band, T1: Tx1 LB, T2: Tx2 LB");
+    }
 
     connect(&m_updateTimer, SIGNAL(timeout()), this, SLOT(updateHardware()));
     connect(&m_statusTimer, SIGNAL(timeout()), this, SLOT(updateStatus()));
@@ -79,6 +96,9 @@ LimeSDRInputGUI::LimeSDRInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
 
     connect(&m_inputMessageQueue, SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()), Qt::QueuedConnection);
     m_limeSDRInput->setMessageQueueToGUI(&m_inputMessageQueue);
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
@@ -243,6 +263,23 @@ bool LimeSDRInputGUI::handleMessage(const Message& message)
 
         return true;
     }
+    else if (LimeSDRInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const LimeSDRInput::MsgFileRecord& notif = (const LimeSDRInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
     else
     {
         return false;
@@ -314,8 +351,41 @@ void LimeSDRInputGUI::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateLabel->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
 }
+
+void LimeSDRInputGUI::displaySampleRate()
+{
+    float minF, maxF;
+    m_limeSDRInput->getSRRange(minF, maxF);
+
+    ui->sampleRate->blockSignals(true);
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF, (uint32_t) maxF);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftDecim);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF/(1<<m_settings.m_log2SoftDecim), (uint32_t) maxF/(1<<m_settings.m_log2SoftDecim));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftDecim));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
 
 void LimeSDRInputGUI::displaySettings()
 {
@@ -325,8 +395,9 @@ void LimeSDRInputGUI::displaySettings()
     ui->extClock->setExternalClockFrequency(m_settings.m_extClockFreq);
     ui->extClock->setExternalClockActive(m_settings.m_extClock);
 
+    updateFrequencyLimits();
     setCenterFrequencyDisplay();
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
     ui->dcOffset->setChecked(m_settings.m_dcBlock);
     ui->iqImbalance->setChecked(m_settings.m_iqCorrection);
@@ -432,24 +503,24 @@ void LimeSDRInputGUI::updateHardware()
 
 void LimeSDRInputGUI::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSourceEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSourceEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSourceEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSourceEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -475,7 +546,7 @@ void LimeSDRInputGUI::updateStatus()
     }
     else
     {
-        if (m_deviceUISet->m_deviceSourceAPI->isBuddyLeader())
+        if (m_deviceUISet->m_deviceAPI->isBuddyLeader())
         {
             LimeSDRInput::MsgGetDeviceInfo* message = LimeSDRInput::MsgGetDeviceInfo::create();
             m_limeSDRInput->getInputMessageQueue()->push(message);
@@ -545,10 +616,16 @@ void LimeSDRInputGUI::on_iqImbalance_toggled(bool checked)
 
 void LimeSDRInputGUI::on_sampleRate_changed(quint64 value)
 {
-    m_settings.m_devSampleRate = value;
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = value;
+    } else {
+        m_settings.m_devSampleRate = value * (1 << m_settings.m_log2SoftDecim);
+    }
+
     updateADCRate();
     setNCODisplay();
-    sendSettings();}
+    sendSettings();
+}
 
 void LimeSDRInputGUI::on_hwDecim_currentIndexChanged(int index)
 {
@@ -562,9 +639,19 @@ void LimeSDRInputGUI::on_hwDecim_currentIndexChanged(int index)
 
 void LimeSDRInputGUI::on_swDecim_currentIndexChanged(int index)
 {
-    if ((index <0) || (index > 6))
+    if ((index <0) || (index > 6)) {
         return;
+    }
+
     m_settings.m_log2SoftDecim = index;
+    displaySampleRate();
+
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+    } else {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew() * (1 << m_settings.m_log2SoftDecim);
+    }
+
     sendSettings();
 }
 
@@ -659,6 +746,12 @@ void LimeSDRInputGUI::on_transverter_clicked()
     sendSettings();
 }
 
+void LimeSDRInputGUI::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
 void LimeSDRInputGUI::openDeviceSettingsDialog(const QPoint& p)
 {
     BasicDeviceSettingsDialog dialog(this);
@@ -676,4 +769,30 @@ void LimeSDRInputGUI::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void LimeSDRInputGUI::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

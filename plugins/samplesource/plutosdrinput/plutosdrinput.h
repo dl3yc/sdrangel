@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,7 +31,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class FileRecord;
 class PlutoSDRInputThread;
 
@@ -98,7 +99,7 @@ public:
         { }
     };
 
-    PlutoSDRInput(DeviceSourceAPI *deviceAPI);
+    PlutoSDRInput(DeviceAPI *deviceAPI);
     ~PlutoSDRInput();
     virtual void destroy();
 
@@ -112,6 +113,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     virtual const QString& getDeviceDescription() const;
     virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
     virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -140,6 +142,20 @@ public:
             SWGSDRangel::SWGDeviceReport& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const PlutoSDRInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            PlutoSDRInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     uint32_t getADCSampleRate() const { return m_deviceSampleRates.m_addaConnvRate; }
     uint32_t getFIRSampleRate() const { return m_deviceSampleRates.m_hb1Rate; }
     void getRSSI(std::string& rssiStr);
@@ -150,7 +166,8 @@ public:
     float getTemperature();
 
  private:
-    DeviceSourceAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
+    bool m_open;
     FileRecord *m_fileSink;
     QString m_deviceDescription;
     PlutoSDRInputSettings m_settings;
@@ -168,7 +185,6 @@ public:
     void suspendBuddies();
     void resumeBuddies();
     bool applySettings(const PlutoSDRInputSettings& settings, bool force = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const PlutoSDRInputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const PlutoSDRInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

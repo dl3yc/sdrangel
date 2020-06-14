@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -32,7 +33,7 @@ namespace Ui {
 class SDRGUI_API AudioSelectDialog : public QDialog {
     Q_OBJECT
 public:
-    explicit AudioSelectDialog(AudioDeviceManager* audioDeviceManager, const QString& deviceName, bool input = false, QWidget* parent = 0);
+    explicit AudioSelectDialog(const AudioDeviceManager* audioDeviceManager, const QString& deviceName, bool input = false, QWidget* parent = 0);
     ~AudioSelectDialog();
 
     QString m_audioDeviceName;
@@ -41,7 +42,7 @@ public:
 private:
     bool getDeviceInfos(bool input, const QString& deviceName, bool& systemDefault, int& sampleRate);
     Ui::AudioSelectDialog* ui;
-    AudioDeviceManager* m_audioDeviceManager;
+    const AudioDeviceManager* m_audioDeviceManager;
     bool m_input;
 
 private slots:

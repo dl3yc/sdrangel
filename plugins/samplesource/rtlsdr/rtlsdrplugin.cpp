@@ -3,7 +3,6 @@
 
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
-#include <device/devicesourceapi.h>
 
 #ifdef SERVER_MODE
 #include "rtlsdrinput.h"
@@ -11,10 +10,12 @@
 #include "rtlsdrgui.h"
 #endif
 #include "rtlsdrplugin.h"
+#include "rtlsdrwebapiadapter.h"
 
 const PluginDescriptor RTLSDRPlugin::m_pluginDescriptor = {
+    QString("RTLSDR"),
 	QString("RTL-SDR Input"),
-	QString("4.3.2"),
+	QString("4.12.3"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -39,42 +40,75 @@ void RTLSDRPlugin::initPlugin(PluginAPI* pluginAPI)
 	pluginAPI->registerSampleSource(m_deviceTypeID, this);
 }
 
-PluginInterface::SamplingDevices RTLSDRPlugin::enumSampleSources()
+void RTLSDRPlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
 {
-	SamplingDevices result;
+    if (listedHwIds.contains(m_hardwareID)) { // check if it was done
+        return;
+    }
+
 	int count = rtlsdr_get_device_count();
 	char vendor[256];
 	char product[256];
 	char serial[256];
 
-	for(int i = 0; i < count; i++) {
+	for(int i = 0; i < count; i++)
+    {
 		vendor[0] = '\0';
 		product[0] = '\0';
 		serial[0] = '\0';
 
 		if(rtlsdr_get_device_usb_strings((uint32_t)i, vendor, product, serial) != 0)
 			continue;
-		QString displayedName(QString("RTL-SDR[%1] %2").arg(i).arg(serial));
+		QString displayableName(QString("RTL-SDR[%1] %2").arg(i).arg(serial));
 
-		result.append(SamplingDevice(displayedName,
-		        m_hardwareID,
-				m_deviceTypeID,
-				QString(serial),
-				i,
-				PluginInterface::SamplingDevice::PhysicalDevice,
-				true,
-				1,
-				0));
+        originDevices.append(OriginDevice(
+            displayableName,
+            m_hardwareID,
+            serial,
+            i, // sequence
+            1, // Nb Rx
+            0  // Nb Tx
+        ));
 	}
+
+    listedHwIds.append(m_hardwareID);
+}
+
+PluginInterface::SamplingDevices RTLSDRPlugin::enumSampleSources(const OriginDevices& originDevices)
+{
+	SamplingDevices result;
+
+	for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
+    {
+        if (it->hardwareId == m_hardwareID)
+        {
+            result.append(SamplingDevice(
+                it->displayableName,
+                it->hardwareId,
+                m_deviceTypeID,
+                it->serial,
+                it->sequence,
+                PluginInterface::SamplingDevice::PhysicalDevice,
+                PluginInterface::SamplingDevice::StreamSingleRx,
+                1,
+                0
+            ));
+            qDebug("RTLSDRPlugin::enumSampleSources: enumerated RTL-SDR device #%d", it->sequence);
+        }
+    }
+
 	return result;
 }
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* RTLSDRPlugin::createSampleSourcePluginInstanceGUI(
-        const QString& sourceId __attribute((unused)),
-        QWidget **widget __attribute((unused)),
-        DeviceUISet *deviceUISet __attribute((unused)))
+        const QString& sourceId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sourceId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -93,7 +127,7 @@ PluginInstanceGUI* RTLSDRPlugin::createSampleSourcePluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSource *RTLSDRPlugin::createSampleSourcePluginInstanceInput(const QString& sourceId, DeviceSourceAPI *deviceAPI)
+DeviceSampleSource *RTLSDRPlugin::createSampleSourcePluginInstance(const QString& sourceId, DeviceAPI *deviceAPI)
 {
     if (sourceId == m_deviceTypeID)
     {
@@ -106,3 +140,7 @@ DeviceSampleSource *RTLSDRPlugin::createSampleSourcePluginInstanceInput(const QS
     }
 }
 
+DeviceWebAPIAdapter *RTLSDRPlugin::createDeviceWebAPIAdapter() const
+{
+    return new RTLSDRWebAPIAdapter();
+}

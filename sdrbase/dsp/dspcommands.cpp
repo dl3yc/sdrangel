@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -34,15 +35,12 @@ MESSAGE_CLASS_DEFINITION(DSPAddBasebandSampleSource, Message)
 MESSAGE_CLASS_DEFINITION(DSPRemoveBasebandSampleSink, Message)
 MESSAGE_CLASS_DEFINITION(DSPRemoveSpectrumSink, Message)
 MESSAGE_CLASS_DEFINITION(DSPRemoveBasebandSampleSource, Message)
-MESSAGE_CLASS_DEFINITION(DSPAddThreadedBasebandSampleSink, Message)
-MESSAGE_CLASS_DEFINITION(DSPAddThreadedBasebandSampleSource, Message)
-MESSAGE_CLASS_DEFINITION(DSPRemoveThreadedBasebandSampleSink, Message)
-MESSAGE_CLASS_DEFINITION(DSPRemoveThreadedBasebandSampleSource, Message)
 MESSAGE_CLASS_DEFINITION(DSPAddAudioSink, Message)
 MESSAGE_CLASS_DEFINITION(DSPRemoveAudioSink, Message)
 MESSAGE_CLASS_DEFINITION(DSPConfigureCorrection, Message)
 MESSAGE_CLASS_DEFINITION(DSPEngineReport, Message)
 MESSAGE_CLASS_DEFINITION(DSPConfigureScopeVis, Message)
 MESSAGE_CLASS_DEFINITION(DSPSignalNotification, Message)
+MESSAGE_CLASS_DEFINITION(DSPMIMOSignalNotification, Message)
 MESSAGE_CLASS_DEFINITION(DSPConfigureChannelizer, Message)
 MESSAGE_CLASS_DEFINITION(DSPConfigureAudio, Message)

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -146,10 +147,14 @@ void RemoteInputBuffer::rwCorrectionEstimate(int slotIndex)
 		}
 		else // read lags
 		{
-			dBytes = (nbDecoderSlots * sizeof(BufferFrame)) - normalizedReadIndex - rwDelta;
+            int bufSize = (nbDecoderSlots * sizeof(BufferFrame));
+			dBytes = bufSize - normalizedReadIndex - rwDelta;
 		}
 
-        m_balCorrection = (m_balCorrection / 4) + (dBytes / (int) (m_currentMeta.m_sampleBytes * 2 * m_nbReads)); // correction is in number of samples. Alpha = 0.25
+         // calculate exponential moving average on floating point for better accuracy (was int)
+        double newCorrection = ((double) dBytes) / (((int) m_currentMeta.m_sampleBytes) * 2 * m_nbReads);
+        m_balCorrection = 0.25*m_balCorrection + 0.75*newCorrection; // exponential average with alpha = 0.75 (original is wrong)
+        //m_balCorrection = (m_balCorrection / 4) + (dBytes / (int) (m_currentMeta.m_sampleBytes * 2 * m_nbReads)); // correction is in number of samples. Alpha = 0.25
 
         if (m_balCorrection < -m_balCorrLimit) {
             m_balCorrection = -m_balCorrLimit;
@@ -166,8 +171,6 @@ void RemoteInputBuffer::checkSlotData(int slotIndex)
 {
     int pseudoWriteIndex = slotIndex * sizeof(BufferFrame);
     m_wrDeltaEstimate = pseudoWriteIndex - m_readIndex;
-    m_nbWrites++;
-
     int rwDelayBytes = (m_wrDeltaEstimate > 0 ? m_wrDeltaEstimate : sizeof(BufferFrame) * nbDecoderSlots + m_wrDeltaEstimate);
     int sampleRate = m_currentMeta.m_sampleRate;
 
@@ -209,6 +212,7 @@ void RemoteInputBuffer::writeData(char *array)
         m_frameHead = frameIndex;          // new frame head
         checkSlotData(decoderIndex);       // check slot before re-init
         rwCorrectionEstimate(decoderIndex);
+        m_nbWrites++;
         initDecodeSlot(decoderIndex);      // collect stats and re-initialize current slot
     }
 
@@ -283,7 +287,7 @@ void RemoteInputBuffer::writeData(char *array)
                         RemoteMetaDataFEC *metaData = (RemoteMetaDataFEC *) recoveredBlock;
 
                         boost::crc_32_type crc32;
-                        crc32.process_bytes(metaData, 20);
+                        crc32.process_bytes(metaData, sizeof(RemoteMetaDataFEC)-4);
 
                         if (crc32.checksum() == metaData->m_crc32)
                         {
@@ -314,7 +318,7 @@ void RemoteInputBuffer::writeData(char *array)
                 if (sampleRate != 0)
                 {
                     m_bufferLenSec = (float) m_framesNbBytes / (float) (sampleRate * metaData->m_sampleBytes * 2);
-                    m_balCorrLimit = sampleRate / 1000; // +/- 1 ms correction max per read
+                    m_balCorrLimit = sampleRate / 400; // +/- 5% correction max per read
                     m_readNbBytes = (sampleRate * metaData->m_sampleBytes * 2) / 20;
                 }
 

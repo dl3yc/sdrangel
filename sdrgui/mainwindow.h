@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,22 +32,18 @@
 class QLabel;
 class QTreeWidgetItem;
 class QDir;
-class SamplingDeviceControl;
 
 class DSPEngine;
 class DSPDeviceSourceEngine;
 class DSPDeviceSinkEngine;
 class Indicator;
-class SpectrumVis;
-class GLSpectrum;
 class GLSpectrumGUI;
 class ChannelWindow;
 class PluginAPI;
 class PluginInstanceGUI;
 class ChannelMarker;
 class PluginManager;
-class DeviceSourceAPI;
-class DeviceSinkAPI;
+class DeviceAPI;
 class DeviceUISet;
 class PluginInterface;
 class QWidget;
@@ -69,6 +66,26 @@ class SDRGUI_API MainWindow : public QMainWindow {
 	Q_OBJECT
 
 public:
+	class MsgDeviceSetFocus : public Message {
+        MESSAGE_CLASS_DECLARATION
+
+    public:
+        int getDeviceSetIndex() const { return m_deviceSetIndex; }
+
+        static MsgDeviceSetFocus* create(int deviceSetIndex)
+        {
+            return new MsgDeviceSetFocus(deviceSetIndex);
+        }
+
+    private:
+        int m_deviceSetIndex;
+
+        MsgDeviceSetFocus(int deviceSetIndex) :
+            Message(),
+            m_deviceSetIndex(deviceSetIndex)
+        { }
+    };
+
 	explicit MainWindow(qtwebapp::LoggerWithFile *logger, const MainParser& parser, QWidget* parent = 0);
 	~MainWindow();
 	static MainWindow *getInstance() { return m_instance; } // Main Window is de facto a singleton so this just returns its reference
@@ -78,10 +95,14 @@ public:
 	void addViewAction(QAction* action);
 
     void addChannelRollup(int deviceTabIndex, QWidget* widget);
-	void setDeviceGUI(int deviceTabIndex, QWidget* gui, const QString& deviceDisplayName, bool sourceDevice = true);
+	void setDeviceGUI(int deviceTabIndex, QWidget* gui, const QString& deviceDisplayName, int deviceType = 0);
 
 	const QTimer& getMasterTimer() const { return m_masterTimer; }
 	const MainSettings& getMainSettings() const { return m_settings; }
+    const PluginManager *getPluginManager() const { return m_pluginManager; }
+    std::vector<DeviceUISet*>& getDeviceUISets() { return m_deviceUIs; }
+    void commandKeysConnect(QObject *object, const char *slot);
+    void commandKeysDisconnect(QObject *object, const char *slot);
 
 	friend class WebAPIAdapterGUI;
 
@@ -159,19 +180,19 @@ private:
         MESSAGE_CLASS_DECLARATION
 
     public:
-        bool isTx() const { return m_tx; }
+        int getDirection() const { return m_direction; }
 
-        static MsgAddDeviceSet* create(bool tx)
+        static MsgAddDeviceSet* create(int direction)
         {
-            return new MsgAddDeviceSet(tx);
+            return new MsgAddDeviceSet(direction);
         }
 
     private:
-        bool m_tx;
+        int m_direction;
 
-        MsgAddDeviceSet(bool tx) :
+        MsgAddDeviceSet(int direction) :
             Message(),
-            m_tx(tx)
+            m_direction(direction)
         { }
     };
 
@@ -196,23 +217,23 @@ private:
     public:
         int getDeviceSetIndex() const { return m_deviceSetIndex; }
         int getDeviceIndex() const { return m_deviceIndex; }
-        bool isTx() const { return m_tx; }
+        int getDeviceType() const { return m_deviceType; }
 
-        static MsgSetDevice* create(int deviceSetIndex, int deviceIndex, bool tx)
+        static MsgSetDevice* create(int deviceSetIndex, int deviceIndex, int deviceType)
         {
-            return new MsgSetDevice(deviceSetIndex, deviceIndex, tx);
+            return new MsgSetDevice(deviceSetIndex, deviceIndex, deviceType);
         }
 
     private:
         int m_deviceSetIndex;
         int m_deviceIndex;
-        bool m_tx;
+        int m_deviceType;
 
-        MsgSetDevice(int deviceSetIndex, int deviceIndex, bool tx) :
+        MsgSetDevice(int deviceSetIndex, int deviceIndex, int deviceType) :
             Message(),
             m_deviceSetIndex(deviceSetIndex),
             m_deviceIndex(deviceIndex),
-            m_tx(tx)
+            m_deviceType(deviceType)
         { }
     };
 
@@ -248,23 +269,20 @@ private:
     public:
         int getDeviceSetIndex() const { return m_deviceSetIndex; }
         int getChannelIndex() const { return m_channelIndex; }
-        bool isTx() const { return m_tx; }
 
-        static MsgDeleteChannel* create(int deviceSetIndex, int channelIndex, bool tx)
+        static MsgDeleteChannel* create(int deviceSetIndex, int channelIndex)
         {
-            return new MsgDeleteChannel(deviceSetIndex, channelIndex, tx);
+            return new MsgDeleteChannel(deviceSetIndex, channelIndex);
         }
 
     private:
         int m_deviceSetIndex;
         int m_channelIndex;
-        bool m_tx;
 
-        MsgDeleteChannel(int deviceSetIndex, int channelIndex, bool tx) :
+        MsgDeleteChannel(int deviceSetIndex, int channelIndex) :
             Message(),
             m_deviceSetIndex(deviceSetIndex),
-            m_channelIndex(channelIndex),
-            m_tx(tx)
+            m_channelIndex(channelIndex)
         { }
     };
 
@@ -280,23 +298,17 @@ private:
 	    QString tabName;
 	};
 
-	class MsgDeviceSetFocus : public Message {
+    class MsgApplySettings : public Message {
         MESSAGE_CLASS_DECLARATION
 
     public:
-        int getDeviceSetIndex() const { return m_deviceSetIndex; }
-
-        static MsgDeviceSetFocus* create(int deviceSetIndex)
-        {
-            return new MsgDeviceSetFocus(deviceSetIndex);
+        static MsgApplySettings* create() {
+            return new MsgApplySettings();
         }
 
     private:
-        int m_deviceSetIndex;
-
-        MsgDeviceSetFocus(int deviceSetIndex) :
-            Message(),
-            m_deviceSetIndex(deviceSetIndex)
+        MsgApplySettings() :
+            Message()
         { }
     };
 
@@ -379,17 +391,20 @@ private slots:
     void on_commandKeyboardConnect_toggled(bool checked);
 	void on_action_Audio_triggered();
     void on_action_Logging_triggered();
-	void on_action_DV_Serial_triggered(bool checked);
+    void on_action_AMBE_triggered();
+    void on_action_LimeRFE_triggered();
 	void on_action_My_Position_triggered();
+    void on_action_DeviceUserArguments_triggered();
 	void sampleSourceChanged();
 	void sampleSinkChanged();
+	void sampleMIMOChanged();
     void channelAddClicked(bool checked);
 	void on_action_Loaded_Plugins_triggered();
 	void on_action_About_triggered();
 	void on_action_addSourceDevice_triggered();
 	void on_action_addSinkDevice_triggered();
+    void on_action_addMIMODevice_triggered();
 	void on_action_removeLastDevice_triggered();
-	void on_action_Exit_triggered();
 	void tabInputViewIndexChanged();
 	void commandKeyPressed(Qt::Key key, Qt::KeyboardModifiers keyModifiers, bool release);
 };

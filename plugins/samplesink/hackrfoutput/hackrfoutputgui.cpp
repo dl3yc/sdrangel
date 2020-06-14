@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,8 +26,7 @@
 #include "gui/basicdevicesettingsdialog.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
-#include "device/devicesinkapi.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "hackrf/devicehackrfvalues.h"
 #include "hackrf/devicehackrfshared.h"
@@ -40,11 +40,12 @@ HackRFOutputGui::HackRFOutputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_deviceUISet(deviceUISet),
 	m_forceSettings(true),
 	m_settings(),
+    m_sampleRateMode(true),
 	m_deviceSampleSink(0),
-	m_lastEngineState(DSPDeviceSinkEngine::StNotStarted),
+	m_lastEngineState(DeviceAPI::StNotStarted),
 	m_doApplySettings(true)
 {
-    m_deviceSampleSink = (HackRFOutput*) m_deviceUISet->m_deviceSinkAPI->getSampleSink();
+    m_deviceSampleSink = (HackRFOutput*) m_deviceUISet->m_deviceAPI->getSampleSink();
 
     ui->setupUi(this);
 	ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
@@ -181,15 +182,6 @@ void HackRFOutputGui::handleInputMessages()
 
             delete message;
         }
-        else if (DeviceHackRFShared::MsgConfigureFrequencyDelta::match(*message))
-        {
-            blockApplySettings(true);
-            DeviceHackRFShared::MsgConfigureFrequencyDelta* deltaMsg = (DeviceHackRFShared::MsgConfigureFrequencyDelta *) message;
-            ui->centerFrequency->setValue(ui->centerFrequency->getValue() + (deltaMsg->getFrequencyDelta()/1000));
-            blockApplySettings(false);
-
-            delete message;
-        }
         else
         {
             if (handleMessage(*message))
@@ -204,30 +196,90 @@ void HackRFOutputGui::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateText->setText(QString("%1k").arg(QString::number(m_sampleRate/1000.0, 'g', 5)));
+    displaySampleRate();
+}
+
+void HackRFOutputGui::displaySampleRate()
+{
+    ui->sampleRate->blockSignals(true);
+    displayFcTooltip();
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, 1000000U, 20000000U);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Host to device sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2Interp);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, 1000000U/(1<<m_settings.m_log2Interp), 20000000U/(1<<m_settings.m_log2Interp));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2Interp));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Host to device sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
+void HackRFOutputGui::updateFrequencyLimits()
+{
+    // values in kHz
+    qint64 deltaFrequency = m_settings.m_transverterMode ? m_settings.m_transverterDeltaFrequency/1000 : 0;
+    qint64 minLimit = (0U) + deltaFrequency;
+    qint64 maxLimit = (7250000U) + deltaFrequency;
+
+    minLimit = minLimit < 0 ? 0 : minLimit > 9999999 ? 9999999 : minLimit;
+    maxLimit = maxLimit < 0 ? 0 : maxLimit > 9999999 ? 9999999 : maxLimit;
+
+    qDebug("HackRFOutputGui::updateFrequencyLimits: delta: %lld min: %lld max: %lld", deltaFrequency, minLimit, maxLimit);
+
+    ui->centerFrequency->setValueRange(7, minLimit, maxLimit);
+}
+
+void HackRFOutputGui::displayFcTooltip()
+{
+    int32_t fShift = DeviceSampleSink::calculateFrequencyShift(
+        m_settings.m_log2Interp,
+        (DeviceSampleSink::fcPos_t) m_settings.m_fcPos,
+        m_settings.m_devSampleRate);
+    ui->fcPos->setToolTip(tr("Relative position of device center frequency: %1 kHz").arg(QString::number(fShift / 1000.0f, 'g', 5)));
 }
 
 void HackRFOutputGui::displaySettings()
 {
     blockApplySettings(true);
-	ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
 
+    ui->transverter->setDeltaFrequency(m_settings.m_transverterDeltaFrequency);
+    ui->transverter->setDeltaFrequencyActive(m_settings.m_transverterMode);
+
+    updateFrequencyLimits();
+
+	ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
 	ui->LOppm->setValue(m_settings.m_LOppmTenths);
 	ui->LOppmText->setText(QString("%1").arg(QString::number(m_settings.m_LOppmTenths/10.0, 'f', 1)));
 
 	ui->biasT->setChecked(m_settings.m_biasT);
 
-	ui->sampleRate->setValue(m_settings.m_devSampleRate);
+	displaySampleRate();
 
 	ui->interp->setCurrentIndex(m_settings.m_log2Interp);
-
+    ui->fcPos->setCurrentIndex((int) m_settings.m_fcPos);
 	ui->lnaExt->setChecked(m_settings.m_lnaExt);
 	ui->txvgaGainText->setText(tr("%1dB").arg(m_settings.m_vgaGain));
 	ui->txvga->setValue(m_settings.m_vgaGain);
 
     unsigned int bandwidthIndex = HackRFBandwidths::getBandwidthIndex(m_settings.m_bandwidth/1000);
 	ui->bbFilter->setCurrentIndex(bandwidthIndex);
-	blockApplySettings(false);
+
+    blockApplySettings(false);
 }
 
 void HackRFOutputGui::displayBandwidths()
@@ -270,6 +322,12 @@ void HackRFOutputGui::on_centerFrequency_changed(quint64 value)
 void HackRFOutputGui::on_sampleRate_changed(quint64 value)
 {
     m_settings.m_devSampleRate = value;
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Interp;
+    }
+
+    displayFcTooltip();
     sendSettings();
 }
 
@@ -301,9 +359,25 @@ void HackRFOutputGui::on_lnaExt_stateChanged(int state)
 
 void HackRFOutputGui::on_interp_currentIndexChanged(int index)
 {
-	if ((index <0) || (index > 6))
+	if ((index <0) || (index > 6)) {
 		return;
+    }
+
 	m_settings.m_log2Interp = index;
+    displaySampleRate();
+    m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Interp;
+    }
+
+	sendSettings();
+}
+
+void HackRFOutputGui::on_fcPos_currentIndexChanged(int index)
+{
+    m_settings.m_fcPos = (HackRFOutputSettings::fcPos_t) (index < 0 ? 0 : index > 2 ? 2 : index);
+    displayFcTooltip();
 	sendSettings();
 }
 
@@ -326,6 +400,22 @@ void HackRFOutputGui::on_startStop_toggled(bool checked)
     }
 }
 
+void HackRFOutputGui::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
+void HackRFOutputGui::on_transverter_clicked()
+{
+    m_settings.m_transverterMode = ui->transverter->getDeltaFrequencyAcive();
+    m_settings.m_transverterDeltaFrequency = ui->transverter->getDeltaFrequency();
+    qDebug("HackRFOutputGui::on_transverter_clicked: %lld Hz %s", m_settings.m_transverterDeltaFrequency, m_settings.m_transverterMode ? "on" : "off");
+    updateFrequencyLimits();
+    m_settings.m_centerFrequency = ui->centerFrequency->getValueNew()*1000;
+    sendSettings();
+}
+
 void HackRFOutputGui::updateHardware()
 {
     if (m_doApplySettings)
@@ -340,25 +430,25 @@ void HackRFOutputGui::updateHardware()
 
 void HackRFOutputGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSinkAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSinkEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSinkEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 ui->startStop->setChecked(false);
                 break;
-            case DSPDeviceSinkEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSinkEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSinkAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;

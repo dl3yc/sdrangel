@@ -1,10 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2017 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2017, 2018 Edouard Griffiths, F4EXB                             //
 // Copyright (C) 2017 Sergey Kostanbaev, Fairwaves Inc.                          //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -19,6 +20,7 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include <algorithm>
 
@@ -29,7 +31,7 @@
 #include "gui/basicdevicesettingsdialog.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 
 XTRXInputGUI::XTRXInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
@@ -37,14 +39,15 @@ XTRXInputGUI::XTRXInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
     ui(new Ui::XTRXInputGUI),
     m_deviceUISet(deviceUISet),
     m_settings(),
+    m_sampleRateMode(true),
     m_sampleRate(0),
-    m_lastEngineState((DSPDeviceSourceEngine::State)-1),
+    m_lastEngineState(DeviceAPI::StNotStarted),
     m_doApplySettings(true),
     m_forceSettings(true),
     m_statusCounter(0),
     m_deviceStatusCounter(0)
 {
-    m_XTRXInput = (XTRXInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_XTRXInput = (XTRXInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
     ui->setupUi(this);
 
@@ -72,6 +75,9 @@ XTRXInputGUI::XTRXInputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
     displaySettings();
 
@@ -173,6 +179,7 @@ bool XTRXInputGUI::handleMessage(const Message& message)
     else if (XTRXInput::MsgReportClockGenChange::match(message))
     {
         m_settings.m_devSampleRate = m_XTRXInput->getDevSampleRate();
+        m_settings.m_log2HardDecim = m_XTRXInput->getLog2HardDecim();
 
         blockApplySettings(true);
         displaySettings();
@@ -225,6 +232,23 @@ bool XTRXInputGUI::handleMessage(const Message& message)
 
         return true;
     }
+    else if (XTRXInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const XTRXInput::MsgFileRecord& notif = (const XTRXInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
     return false;
 }
 
@@ -232,7 +256,7 @@ void XTRXInputGUI::handleInputMessages()
 {
     Message* message;
 
-    while ((message = m_inputMessageQueue.pop()) != 0)
+    while ((message = m_inputMessageQueue.pop()))
     {
         if (DSPSignalNotification::match(*message))
         {
@@ -277,7 +301,39 @@ void XTRXInputGUI::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateLabel->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
+}
+
+void XTRXInputGUI::displaySampleRate()
+{
+    float minF, maxF, stepF;
+    m_XTRXInput->getSRRange(minF, maxF, stepF);
+
+    ui->sampleRate->blockSignals(true);
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF, (uint32_t) maxF);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftDecim);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF/(1<<m_settings.m_log2SoftDecim), (uint32_t) maxF/(1<<m_settings.m_log2SoftDecim));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftDecim));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
 }
 
 void XTRXInputGUI::displaySettings()
@@ -286,7 +342,7 @@ void XTRXInputGUI::displaySettings()
     ui->extClock->setExternalClockActive(m_settings.m_extClock);
 
     setCenterFrequencyDisplay();
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
     ui->dcOffset->setChecked(m_settings.m_dcBlock);
     ui->iqImbalance->setChecked(m_settings.m_iqCorrection);
@@ -390,24 +446,24 @@ void XTRXInputGUI::updateHardware()
 
 void XTRXInputGUI::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-        case DSPDeviceSourceEngine::StNotStarted:
+        case DeviceAPI::StNotStarted:
             ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
             break;
-        case DSPDeviceSourceEngine::StIdle:
+        case DeviceAPI::StIdle:
             ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
             break;
-        case DSPDeviceSourceEngine::StRunning:
+        case DeviceAPI::StRunning:
             ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
             break;
-        case DSPDeviceSourceEngine::StError:
+        case DeviceAPI::StError:
             ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-            QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+            QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
             break;
         default:
             break;
@@ -433,7 +489,7 @@ void XTRXInputGUI::updateStatus()
     }
     else
     {
-        if (m_deviceUISet->m_deviceSourceAPI->isBuddyLeader())
+        if (m_deviceUISet->m_deviceAPI->isBuddyLeader())
         {
             XTRXInput::MsgGetDeviceInfo* message = XTRXInput::MsgGetDeviceInfo::create();
             m_XTRXInput->getInputMessageQueue()->push(message);
@@ -503,16 +559,25 @@ void XTRXInputGUI::on_iqImbalance_toggled(bool checked)
 
 void XTRXInputGUI::on_sampleRate_changed(quint64 value)
 {
-    m_settings.m_devSampleRate = value;
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = value;
+    } else {
+        m_settings.m_devSampleRate = value * (1 << m_settings.m_log2SoftDecim);
+    }
+
     updateADCRate();
     setNCODisplay();
-    sendSettings();}
+    sendSettings();
+}
 
 void XTRXInputGUI::on_hwDecim_currentIndexChanged(int index)
 {
-    if ((index <0) || (index > 5))
+    if ((index <0) || (index > 5)) {
         return;
+    }
+
     m_settings.m_log2HardDecim = index;
+
     updateADCRate();
     setNCODisplay();
     sendSettings();
@@ -520,9 +585,19 @@ void XTRXInputGUI::on_hwDecim_currentIndexChanged(int index)
 
 void XTRXInputGUI::on_swDecim_currentIndexChanged(int index)
 {
-    if ((index <0) || (index > 6))
+    if ((index <0) || (index > 6)) {
         return;
+    }
+
     m_settings.m_log2SoftDecim = index;
+    displaySampleRate();
+
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+    } else {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew() * (1 << m_settings.m_log2SoftDecim);
+    }
+
     sendSettings();
 }
 
@@ -601,6 +676,12 @@ void XTRXInputGUI::on_pwrmode_currentIndexChanged(int index)
     sendSettings();
 }
 
+void XTRXInputGUI::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
 void XTRXInputGUI::openDeviceSettingsDialog(const QPoint& p)
 {
     BasicDeviceSettingsDialog dialog(this);
@@ -618,4 +699,30 @@ void XTRXInputGUI::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void XTRXInputGUI::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

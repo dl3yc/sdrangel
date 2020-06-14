@@ -48,8 +48,10 @@ The following items are presented hierarchically from left to right:
   - Preferences:
     - _Audio_: opens a dialog to choose the audio output device (see 1.1 below for details)
     - _Logging_: opens a dialog to choose logging options (see 1.2 below for details)
-    - _DV Serial_: if you have one or more AMBE3000 serial devices for AMBE digital voice check to connect them. If unchecked DV decoding will resort to mbelib if available else no audio will be produced for AMBE digital voice
+    - _AMBE_: Opens a dialog to select AMBE3000 serial devices or AMBE server addresses to use for AMBE digital voice processing. If none is selected AMBE frames decoding will be done with mbelib if available else no audio will be produced for AMBE digital voice (see 1.3 below for details)
     - _My Position_: opens a dialog to enter your station ("My Position") coordinates in decimal degrees with north latitudes positive and east longitudes positive. This is used whenever positional data is to be displayed (APRS, DPRS, ...). For it now only works with D-Star $$CRC frames. See [DSD demod plugin](../plugins/channelrx/demoddsd/readme.md) for details on how to decode Digital Voice modes.
+    - _Devices_: section to deal with devices settings
+      - _User arguments_: opens a dialog to let the user give arguments specific to a device and its instance (sequence) in the system
   - Help:
     - _Loaded Plugins_: shows details about the loaded plugins (see 1.3 below for details)
     - _About_: current version and blah blah.
@@ -58,7 +60,7 @@ The following items are presented hierarchically from left to right:
 
 See the audio management documentation [here](audio.md).
 
-<h4>1.2. Logging preferences</h4>
+<h4>1.2. Preferences - Logging</h4>
 
 ![Main Window logging preferences](../doc/img/MainWindow_logging.png)
 
@@ -112,8 +114,65 @@ Use the "OK" button to validate all changes
 
 Use the "Cancel" button to dismiss all changes
 
+<h4>1.3 Preferences - AMBE</h4>
 
-<h4>1.3. Loaded plugins display</h4>
+When clicking on the AMBE submenu a dialog opens to let you specify physical AMBE devices to decode AMBE frames produced by digital voice signals (using DSD decoder plugin).
+
+![Main Window AMBE](../doc/img/MainWindow_ambe.png)
+
+<h5>1.3.1 AMBE server address and port or direct input</h5>
+
+Use this freeflow text input box to specify either the address and port of an AMBE server in the form: &lt;IPv4 address&gt;:&lt;port&gt; or any directly attached physical device address like a COM port on Windows.
+
+<h5>1.3.2 Import above address or device</h5>
+
+Import the address or device specified in (1) into the list of used devices. The system will try to open the device or contact the server and will add it to the list only if successful.
+
+<h5>1.3.3 Remove in use device or address</h5>
+
+When a device or address is selected in the in use list (6) push this button to remove it from the list. The corresponding resources will be released.
+
+<h5>1.3.4 Refresh in use list</h5>
+
+Checks the list of devices or addresses currently in use and update the in use list (6).
+
+<h5>1.3.5 Empty in use list</h5>
+
+Removes all devices or addresses in use. The in use list (6) is cleared consequently. This removes all AMBE devices related resources attached to the current instance of the SDRangel program. Therefore consecutive AMBE frames decoding will be handled by the mbelib library if available or no audio will be output.
+
+<h5>1.3.6 In use list</h5>
+
+List of devices or addresses currently in use for AMBE frames decoding by this instance of the SDRangel program.
+
+<h5>1.3.7 Import serial device</h5>
+
+Imports a serial device scanned in the list of available AMBE 3000 serial devices (9) in the in use list. If this device is already in the in use list then nothing happens and this is reported in the status text (10)
+
+<h5>1.3.8 Import all serial devices</h5>
+
+Imports all serial devices scanned in the list of available AMBE 3000 serial devices (9) in the in use list. If any device is already in the in use list then it is not added twice.
+
+<h5>1.3.9 List of available AMBE 3000 serial devices</h5>
+
+This is the list of AMBE 3000 currently attached to the system directly. This list gets updated at every opening of the dialog.
+
+<h5>1.3.10 Status text</h5>
+
+A brief text reports the result of the current action
+
+<h5>1.3.11 Close button</h5>
+
+Use this button to dismiss the dialog
+
+<h4>1.4 Prefernces - LimeRFE</h4>
+
+Only in Linux and if LimeSuite library is available this opens a dialog to control a LimeRFE device via USB. The details are provided [here](limerfeusbgui.md).
+
+<h4>1.5 Preferences - Devices - User arguments</h4>
+
+See the devuces user arguments management documentation [here](deviceuserargs.md).
+
+<h4>1.6. Help - Loaded plugins display</h4>
 
 When clicking on Help -> Loaded Plugins from the main menu bar a dialog box appears that shows information about the plugins loaded in SDRangel:
 
@@ -168,22 +227,22 @@ Use this checkbox to toggle on/off the reverse API feature. With reverse API eng
 
 ```
 {
-  "deviceHwType": "HackRF", 
+  "deviceHwType": "HackRF",
   "hackRFInputSettings": {
-    "LOppmTenths": 0, 
-    "bandwidth": 1750000, 
-    "biasT": 0, 
-    "centerFrequency": 435000000, 
-    "dcBlock": 0, 
-    "devSampleRate": 2400000, 
-    "fcPos": 2, 
-    "iqCorrection": 0, 
-    "linkTxFrequency": 0, 
-    "lnaExt": 0, 
-    "lnaGain": 16, 
-    "log2Decim": 0, 
+    "LOppmTenths": 0,
+    "bandwidth": 1750000,
+    "biasT": 0,
+    "centerFrequency": 435000000,
+    "dcBlock": 0,
+    "devSampleRate": 2400000,
+    "fcPos": 2,
+    "iqCorrection": 0,
+    "linkTxFrequency": 0,
+    "lnaExt": 0,
+    "lnaGain": 16,
+    "log2Decim": 0,
     "vgaGain": 16
-  }, 
+  },
   "tx": 0
 }
 ```
@@ -302,9 +361,10 @@ Use this combo box to select which window is applied to the FFT:
   - **Bart**: Bartlett
   - **B-H**: Blackmann-Harris
   - **FT**: Flat top
-  - **Ham**: Hamming (default)
-  - **Han**: Hanning
+  - **Ham**: Hamming
+  - **Han**: Hanning (default)
   - **Rec**: Rectangular (no window)
+  - **Kai**: Kaiser with alpha = 2.15 (beta = 6.76) gives sidelobes &lt; -70dB
 
 <h4>4.2. FFT size</h4>
 
@@ -673,19 +733,23 @@ This area shows the control GUIs of the channels currently active for the device
 
 Details about the GUIs can be found in the channel plugins documentation which consists of a readme.md file in each of the channel plugins folder (done partially).
 
+<h4>6.1. Basic channel settings</h4>
+
+![Channel control 01](../doc/img/MainWindow_channel_01.png)
+
 With most channel types some common basic settings can be set with a popup dialog. This dialog is opened by clicking on the small grey square on the top left of the channel window. The settings are as follows:
 
 ![Basic channel settings](../doc/img/BasicChannelSettings.png)
 
-<h4>6.1: Window title</h4>
+<h5>6.1.1: Window title</h5>
 
 Changes the channel window title
 
-<h4>6.2: Channel color</h4>
+<h5>6.1.2: Channel color</h5>
 
 Changes the color of the window title bar and spectrum overlay. To change the color click on the color square to open a color chooser dialog. The hex rgb value is displayed next to the color square.
 
-<h4>6.3: Frequency scale display type</h4>
+<h5>6.1.3: Frequency scale display type</h5>
 
 When the mouse is over the channel window or over the central line in the spectrum a channel parameter is displayed on the frequency scale. This parameter can be:
 
@@ -694,32 +758,32 @@ When the mouse is over the channel window or over the central line in the spectr
   - AdSnd: UDP address and send port
   - AdRcv: UDP address and receive port
 
-<h4>6.4: Toggle reverse API feature</h4>
+<h5>6.1.4: Toggle reverse API feature</h5>
 
 Use this checkbox to toggle on/off the reverse API feature. With reverse API engaged the changes in the channel settings are forwarded to an API endpoint given by address (6.5), port (6.6), device index (6.7) and channel index (6.8) in the same format as the SDRangel REST API channel settings endpoint. With the values of the screenshot the API URL is: `http://127.0.0.1:8888/sdrangel/deviceset/0/channel/0/settings` The JSON payload follows the same format as the SDRangel REST API channel settings. Using the same example this would be:
 
 ```
 {
   "SSBDemodSettings": {
-    "agc": 0, 
-    "agcClamping": 0, 
-    "agcPowerThreshold": -40, 
-    "agcThresholdGate": 4, 
-    "agcTimeLog2": 7, 
-    "audioBinaural": 0, 
-    "audioDeviceName": "System default device", 
-    "audioFlipChannels": 0, 
-    "audioMute": 0, 
-    "dsb": 0, 
-    "inputFrequencyOffset": 0, 
-    "lowCutoff": 300, 
-    "rfBandwidth": 3000, 
-    "rgbColor": -16711936, 
-    "spanLog2": 3, 
-    "title": "SSB Demodulator", 
+    "agc": 0,
+    "agcClamping": 0,
+    "agcPowerThreshold": -40,
+    "agcThresholdGate": 4,
+    "agcTimeLog2": 7,
+    "audioBinaural": 0,
+    "audioDeviceName": "System default device",
+    "audioFlipChannels": 0,
+    "audioMute": 0,
+    "dsb": 0,
+    "inputFrequencyOffset": 0,
+    "lowCutoff": 300,
+    "rfBandwidth": 3000,
+    "rgbColor": -16711936,
+    "spanLog2": 3,
+    "title": "SSB Demodulator",
     "volume": 3
-  }, 
-  "channelType": "SSBDemod", 
+  },
+  "channelType": "SSBDemod",
   "tx": 0
 }
 ```
@@ -727,29 +791,37 @@ Note that the PATCH method is used. The full set of parameters is sent only when
 
 More details on this feature can be found on the corresponding Wiki page.
 
-<h4>6.5: API address</h4>
+<h5>6.1.5: API address</h5>
 
 This is the IP address of the API endpoint
 
-<h4>6.6: API port</h4>
+<h5>6.1.6: API port</h5>
 
 This is the IP port of the API endpoint
 
-<h4>6.7: Device index</h4>
+<h5>6.1.7: Device index</h5>
 
 This is the targeted device index
 
-<h4>6.8: Channel index</h4>
+<h5>6.1.8: Channel index</h5>
 
 This is the targeted channel index
 
-<h4>6.9: Cancel changes and exit dialog</h4>
+<h5>6.1.9: Cancel changes and exit dialog</h5>
 
 Do not make any changes and exit dialog
 
-<h4>6.10: Validate and exit dialog</h4>
+<h5>6.1.10: Validate and exit dialog</h5>
 
 Validates the data (saves it in the channel marker object) and exits the dialog
+
+<h4>6.2 Device stream assignment</h4>
+
+![Channel control 02](../doc/img/MainWindow_channel_02.png)
+
+The bigger square next to the leftmost "c" square is the device stream assignment control. With single Rx (source device set) and single Tx devices (sink device set) this is inactive because the channel is simply connected to the single stream as shown by the "S" letter.
+
+This is in place for future MIMO devices and channels support (v.5).
 
 <h3>7. Spectrum from device</h3>
 
@@ -763,7 +835,7 @@ The spectrum display is controlled by the display control (4).
 
 <h4>8.1. SDRangel version</h4>
 
-Self explanatory
+This is the current tag or the latest tag followed by the number of commits since the latest tag followed by the git commit SHA1 (8 hex characters) preceded by 'g'. Ex: `v4.5.3-29-gf5f2349d`
 
 <h4>8.2. Qt version</h4>
 
@@ -779,4 +851,4 @@ Pretty print of the operating system in which SDRangel is running.
 
 <h4>8.5. Local date and time</h4>
 
-Local time timestamp according to system clock
+Local time timestamp according to system clock. Format: `yyyy-mm-dd HH:MM:ss TZ`

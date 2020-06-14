@@ -6,8 +6,9 @@
 #include "lorademod.h"
 
 const PluginDescriptor LoRaPlugin::m_pluginDescriptor = {
+    LoRaDemod::m_channelId,
 	QString("LoRa Demodulator"),
-	QString("3.14.5"),
+	QString("4.14.6"),
 	QString("(c) 2015 John Greb"),
 	QString("http://www.maintech.de"),
 	true,
@@ -33,17 +34,17 @@ void LoRaPlugin::initPlugin(PluginAPI* pluginAPI)
 	m_pluginAPI->registerRxChannel(LoRaDemod::m_channelIdURI, LoRaDemod::m_channelId, this);
 }
 
-PluginInstanceGUI* LoRaPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* LoRaPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return LoRaDemodGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 
-BasebandSampleSink* LoRaPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* LoRaPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new LoRaDemod(deviceAPI);
 }
 
-ChannelSinkAPI* LoRaPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* LoRaPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new LoRaDemod(deviceAPI);
 }

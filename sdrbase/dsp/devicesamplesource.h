@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,6 +32,7 @@ namespace SWGSDRangel
     class SWGDeviceSettings;
     class SWGDeviceState;
     class SWGDeviceReport;
+    class SWGDeviceActions;
 }
 
 class SDRBASE_API DeviceSampleSource : public QObject {
@@ -41,6 +43,11 @@ public:
         FC_POS_SUPRA,
         FC_POS_CENTER
     } fcPos_t;
+
+    typedef enum {
+        FSHIFT_STD = 0, // Standard Rx independent
+        FSHIFT_TXSYNC   // Follows same scheme as Tx
+    } FrequencyShiftScheme;
 
 	DeviceSampleSource();
 	virtual ~DeviceSampleSource();
@@ -55,6 +62,7 @@ public:
 
 	virtual const QString& getDeviceDescription() const = 0;
 	virtual int getSampleRate() const = 0; //!< Sample rate exposed by the source
+    virtual void setSampleRate(int sampleRate) = 0; //!< For when the source sample rate is set externally
 	virtual quint64 getCenterFrequency() const = 0; //!< Center frequency exposed by the source
     virtual void setCenterFrequency(qint64 centerFrequency) = 0;
 
@@ -110,6 +118,17 @@ public:
         return 501;
     }
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage)
+    {
+        (void) deviceSettingsKeys;
+        (void) actions;
+        errorMessage = "Not implemented";
+        return 501;
+    }
+
 	MessageQueue *getInputMessageQueue() { return &m_inputMessageQueue; }
 	virtual void setMessageQueueToGUI(MessageQueue *queue) = 0; // pure virtual so that child classes must have to deal with this
 	MessageQueue *getMessageQueueToGUI() { return m_guiMessageQueue; }
@@ -121,12 +140,26 @@ public:
             int log2Decim,
             fcPos_t fcPos,
             quint32 devSampleRate,
-            bool transverterMode = false);
+            FrequencyShiftScheme frequencyShiftScheme,
+            bool transverterMode = false
+    );
+
+    static qint64 calculateCenterFrequency(
+            quint64 deviceCenterFrequency,
+            qint64 transverterDeltaFrequency,
+            int log2Decim,
+            fcPos_t fcPos,
+            quint32 devSampleRate,
+            FrequencyShiftScheme frequencyShiftScheme,
+            bool transverterMode = false
+    );
 
     static qint32 calculateFrequencyShift(
             int log2Decim,
             fcPos_t fcPos,
-            quint32 devSampleRate);
+            quint32 devSampleRate,
+            FrequencyShiftScheme frequencyShiftScheme
+    );
 
 protected slots:
 	void handleInputMessages();

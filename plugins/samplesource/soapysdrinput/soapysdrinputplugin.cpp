@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,10 +18,10 @@
 #include <QtPlugin>
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
-#include "device/devicesourceapi.h"
 #include "soapysdr/devicesoapysdr.h"
 
 #include "soapysdrinputplugin.h"
+#include "soapysdrinputwebapiadapter.h"
 
 #ifdef SERVER_MODE
 #include "soapysdrinput.h"
@@ -29,8 +30,9 @@
 #endif
 
 const PluginDescriptor SoapySDRInputPlugin::m_pluginDescriptor = {
+    QString("SoapySDR"),
     QString("SoapySDR Input"),
-    QString("4.4.4"),
+    QString("4.14.5"),
     QString("(c) Edouard Griffiths, F4EXB"),
     QString("https://github.com/f4exb/sdrangel"),
     true,
@@ -55,33 +57,45 @@ void SoapySDRInputPlugin::initPlugin(PluginAPI* pluginAPI)
     pluginAPI->registerSampleSource(m_deviceTypeID, this);
 }
 
-PluginInterface::SamplingDevices SoapySDRInputPlugin::enumSampleSources()
+void SoapySDRInputPlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
+{
+    if (listedHwIds.contains(m_hardwareID)) { // check if it was done
+        return;
+    }
+
+    DeviceSoapySDR& deviceSoapySDR = DeviceSoapySDR::instance();
+    deviceSoapySDR.enumOriginDevices(m_hardwareID, originDevices);
+    listedHwIds.append(m_hardwareID);
+}
+
+PluginInterface::SamplingDevices SoapySDRInputPlugin::enumSampleSources(const OriginDevices& originDevices)
 {
     SamplingDevices result;
-    DeviceSoapySDR& deviceSoapySDR = DeviceSoapySDR::instance();
-    const std::vector<DeviceSoapySDRScan::SoapySDRDeviceEnum>& devicesEnumeration = deviceSoapySDR.getDevicesEnumeration();
-    qDebug("SoapySDRInputPlugin::enumSampleSources: %lu SoapySDR devices. Enumerate these with Rx channel(s):", devicesEnumeration.size());
-    std::vector<DeviceSoapySDRScan::SoapySDRDeviceEnum>::const_iterator it = devicesEnumeration.begin();
 
-    for (int idev = 0; it != devicesEnumeration.end(); ++it, idev++)
+    for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
     {
-        unsigned int nbRxChannels = it->m_nbRx;
-
-        for (unsigned int ichan = 0; ichan < nbRxChannels; ichan++)
+        if (it->hardwareId == m_hardwareID)
         {
-            QString displayedName(QString("SoapySDR[%1:%2] %3").arg(idev).arg(ichan).arg(it->m_label));
-            QString serial(QString("%1-%2").arg(it->m_driverName).arg(it->m_sequence));
-            qDebug("SoapySDRInputPlugin::enumSampleSources: device #%d (%s) serial %s channel %u",
-                    idev, it->m_label.toStdString().c_str(), serial.toStdString().c_str(), ichan);
-            result.append(SamplingDevice(displayedName,
-                    m_hardwareID,
+            unsigned int nbRxChannels = it->nbRxStreams;
+
+            for (unsigned int ichan = 0; ichan < nbRxChannels; ichan++)
+            {
+                QString displayedName = it->displayableName;
+                displayedName.replace(QString("$1]"), QString("%1]").arg(ichan));
+                qDebug("SoapySDRInputPlugin::enumSampleSources: device #%d serial %s channel %u",
+                        it->sequence, it->serial.toStdString().c_str(), ichan);
+                result.append(SamplingDevice(
+                    displayedName,
+                    it->hardwareId,
                     m_deviceTypeID,
-                    serial,
-                    idev,
+                    it->serial,
+                    it->sequence,
                     PluginInterface::SamplingDevice::PhysicalDevice,
-                    true,
+                    PluginInterface::SamplingDevice::StreamSingleRx,
                     nbRxChannels,
-                    ichan));
+                    ichan
+                ));
+            }
         }
     }
 
@@ -90,10 +104,13 @@ PluginInterface::SamplingDevices SoapySDRInputPlugin::enumSampleSources()
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* SoapySDRInputPlugin::createSampleSourcePluginInstanceGUI(
-        const QString& sourceId __attribute__((unused)),
-        QWidget **widget __attribute__((unused)),
-        DeviceUISet *deviceUISet __attribute__((unused)))
+        const QString& sourceId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sourceId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -115,7 +132,7 @@ PluginInstanceGUI* SoapySDRInputPlugin::createSampleSourcePluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSource *SoapySDRInputPlugin::createSampleSourcePluginInstanceInput(const QString& sourceId, DeviceSourceAPI *deviceAPI)
+DeviceSampleSource *SoapySDRInputPlugin::createSampleSourcePluginInstance(const QString& sourceId, DeviceAPI *deviceAPI)
 {
     if (sourceId == m_deviceTypeID)
     {
@@ -128,7 +145,7 @@ DeviceSampleSource *SoapySDRInputPlugin::createSampleSourcePluginInstanceInput(c
     }
 }
 
-
-
-
-
+DeviceWebAPIAdapter *SoapySDRInputPlugin::createDeviceWebAPIAdapter() const
+{
+    return new SoapySDRInputWebAPIAdapter();
+}

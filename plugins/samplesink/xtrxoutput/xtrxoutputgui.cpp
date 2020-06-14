@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -26,7 +27,7 @@
 #include "gui/basicdevicesettingsdialog.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "xtrxoutputgui.h"
 
@@ -35,14 +36,15 @@ XTRXOutputGUI::XTRXOutputGUI(DeviceUISet *deviceUISet, QWidget* parent) :
     ui(new Ui::XTRXOutputGUI),
     m_deviceUISet(deviceUISet),
     m_settings(),
+    m_sampleRateMode(true),
     m_sampleRate(0),
-    m_lastEngineState((DSPDeviceSinkEngine::State)-1),
+    m_lastEngineState(DeviceAPI::StNotStarted),
     m_doApplySettings(true),
     m_forceSettings(true),
     m_statusCounter(0),
     m_deviceStatusCounter(0)
 {
-    m_XTRXOutput = (XTRXOutput*) m_deviceUISet->m_deviceSinkAPI->getSampleSink();
+    m_XTRXOutput = (XTRXOutput*) m_deviceUISet->m_deviceAPI->getSampleSink();
 
     ui->setupUi(this);
 
@@ -171,6 +173,7 @@ bool XTRXOutputGUI::handleMessage(const Message& message)
     else if (XTRXOutput::MsgReportClockGenChange::match(message))
     {
         m_settings.m_devSampleRate = m_XTRXOutput->getDevSampleRate();
+        m_settings.m_log2HardInterp = m_XTRXOutput->getLog2HardInterp();
 
         blockApplySettings(true);
         displaySettings();
@@ -230,7 +233,7 @@ void XTRXOutputGUI::handleInputMessages()
 {
     Message* message;
 
-    while ((message = m_inputMessageQueue.pop()) != 0)
+    while ((message = m_inputMessageQueue.pop()))
     {
         if (DSPSignalNotification::match(*message))
         {
@@ -275,7 +278,39 @@ void XTRXOutputGUI::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateLabel->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
+}
+
+void XTRXOutputGUI::displaySampleRate()
+{
+    float minF, maxF, stepF;
+    m_XTRXOutput->getSRRange(minF, maxF, stepF);
+
+    ui->sampleRate->blockSignals(true);
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF, (uint32_t) maxF);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftInterp);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, (uint32_t) minF/(1<<m_settings.m_log2SoftInterp), (uint32_t) maxF/(1<<m_settings.m_log2SoftInterp));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2SoftInterp));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
 }
 
 void XTRXOutputGUI::displaySettings()
@@ -284,7 +319,7 @@ void XTRXOutputGUI::displaySettings()
     ui->extClock->setExternalClockActive(m_settings.m_extClock);
 
     setCenterFrequencyDisplay();
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
     ui->hwInterp->setCurrentIndex(m_settings.m_log2HardInterp);
     ui->swInterp->setCurrentIndex(m_settings.m_log2SoftInterp);
@@ -365,24 +400,24 @@ void XTRXOutputGUI::updateHardware()
 
 void XTRXOutputGUI::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSinkAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-        case DSPDeviceSinkEngine::StNotStarted:
+        case DeviceAPI::StNotStarted:
             ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
             break;
-        case DSPDeviceSinkEngine::StIdle:
+        case DeviceAPI::StIdle:
             ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
             break;
-        case DSPDeviceSinkEngine::StRunning:
+        case DeviceAPI::StRunning:
             ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
             break;
-        case DSPDeviceSinkEngine::StError:
+        case DeviceAPI::StError:
             ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-            QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSinkAPI->errorMessage());
+            QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
             break;
         default:
             break;
@@ -408,7 +443,7 @@ void XTRXOutputGUI::updateStatus()
     }
     else
     {
-        if (m_deviceUISet->m_deviceSinkAPI->isBuddyLeader())
+        if (m_deviceUISet->m_deviceAPI->isBuddyLeader())
         {
             XTRXOutput::MsgGetDeviceInfo* message = XTRXOutput::MsgGetDeviceInfo::create();
             m_XTRXOutput->getInputMessageQueue()->push(message);
@@ -454,16 +489,24 @@ void XTRXOutputGUI::on_ncoEnable_toggled(bool checked)
 
 void XTRXOutputGUI::on_sampleRate_changed(quint64 value)
 {
-    m_settings.m_devSampleRate = value;
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = value;
+    } else {
+        m_settings.m_devSampleRate = value * (1 << m_settings.m_log2SoftInterp);
+    }
+
     updateDACRate();
     setNCODisplay();
     sendSettings();}
 
 void XTRXOutputGUI::on_hwInterp_currentIndexChanged(int index)
 {
-    if ((index <0) || (index > 5))
+    if ((index <0) || (index > 5)) {
         return;
+    }
+
     m_settings.m_log2HardInterp = index;
+
     updateDACRate();
     setNCODisplay();
     sendSettings();
@@ -471,9 +514,19 @@ void XTRXOutputGUI::on_hwInterp_currentIndexChanged(int index)
 
 void XTRXOutputGUI::on_swInterp_currentIndexChanged(int index)
 {
-    if ((index <0) || (index > 6))
+    if ((index <0) || (index > 6)) {
         return;
+    }
+
     m_settings.m_log2SoftInterp = index;
+    displaySampleRate();
+
+    if (m_sampleRateMode) {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+    } else {
+        m_settings.m_devSampleRate = ui->sampleRate->getValueNew() * (1 << m_settings.m_log2SoftInterp);
+    }
+
     sendSettings();
 }
 
@@ -508,6 +561,12 @@ void XTRXOutputGUI::on_pwrmode_currentIndexChanged(int index)
 {
     m_settings.m_pwrmode = index;
     sendSettings();
+}
+
+void XTRXOutputGUI::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
 }
 
 void XTRXOutputGUI::openDeviceSettingsDialog(const QPoint& p)

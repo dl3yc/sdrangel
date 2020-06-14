@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,10 +25,13 @@
 #include "bfmdemodgui.h"
 #endif
 #include "bfmdemod.h"
+#include "bfmdemodwebapiadapter.h"
+#include "bfmplugin.h"
 
 const PluginDescriptor BFMPlugin::m_pluginDescriptor = {
+    BFMDemod::m_channelId,
 	QString("Broadcast FM Demodulator"),
-	QString("4.3.2"),
+	QString("4.14.6"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -55,25 +59,29 @@ void BFMPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* BFMPlugin::createRxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSink *rxChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSink *rxChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* BFMPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* BFMPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
 	return BFMDemodGUI::create(m_pluginAPI, deviceUISet, rxChannel);
 }
 #endif
 
-BasebandSampleSink* BFMPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* BFMPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new BFMDemod(deviceAPI);
 }
 
-ChannelSinkAPI* BFMPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* BFMPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new BFMDemod(deviceAPI);
 }
 
+ChannelWebAPIAdapter* BFMPlugin::createChannelWebAPIAdapter() const
+{
+	return new BFMDemodWebAPIAdapter();
+}

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -43,6 +44,7 @@ void FreeDVModSettings::resetToDefaults()
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
     m_freeDVMode = FreeDVMode::FreeDVMode2400A;
     m_gaugeInputElseModem = false;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -65,6 +67,8 @@ QByteArray FreeDVModSettings::serialize() const
 
     if (m_cwKeyerGUI) {
         s.writeBlob(6, m_cwKeyerGUI->serialize());
+    } else { // standalone operation with presets
+        s.writeBlob(6, m_cwKeyerSettings.serialize());
     }
 
     s.writeBool(7, m_gaugeInputElseModem);
@@ -83,6 +87,7 @@ QByteArray FreeDVModSettings::serialize() const
     s.writeU32(24, m_reverseAPIPort);
     s.writeU32(25, m_reverseAPIDeviceIndex);
     s.writeU32(26, m_reverseAPIChannelIndex);
+    s.writeS32(27, m_streamIndex);
 
     return s.final();
 }
@@ -116,10 +121,12 @@ bool FreeDVModSettings::deserialize(const QByteArray& data)
         }
 
         d.readU32(5, &m_rgbColor);
+        d.readBlob(6, &bytetmp);
 
         if (m_cwKeyerGUI) {
-            d.readBlob(6, &bytetmp);
             m_cwKeyerGUI->deserialize(bytetmp);
+        } else { // standalone operation with presets
+            m_cwKeyerSettings.deserialize(bytetmp);
         }
 
         d.readBool(7, &m_gaugeInputElseModem, false);
@@ -161,6 +168,7 @@ bool FreeDVModSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(26, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readS32(27, &m_streamIndex, 0);
 
         return true;
     }
@@ -176,8 +184,6 @@ int FreeDVModSettings::getHiCutoff(FreeDVMode freeDVMode)
     switch(freeDVMode)
     {
         case FreeDVModSettings::FreeDVMode800XA: // C4FM NB
-            return 2400.0;
-            break;
         case FreeDVModSettings::FreeDVMode700C: // OFDM
         case FreeDVModSettings::FreeDVMode700D: // OFDM
         case FreeDVModSettings::FreeDVMode1600: // OFDM

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,10 +30,16 @@ MainParser::MainParser() :
     m_serverPortOption(QStringList() << "p" << "api-port",
         "Web API server port.",
         "port",
-        "8091")
+        "8091"),
+    m_fftwfWisdomOption(QStringList() << "w" << "fftwf-wisdom",
+        "FFTW Wisdom file.",
+        "file",
+        "")
 {
     m_serverAddress = "127.0.0.1";
     m_serverPort = 8091;
+    m_mimoSupport = false;
+    m_fftwfWindowFileName = "";
 
     m_parser.setApplicationDescription("Software Defined Radio application");
     m_parser.addHelpOption();
@@ -40,6 +47,7 @@ MainParser::MainParser() :
 
     m_parser.addOption(m_serverAddressOption);
     m_parser.addOption(m_serverPortOption);
+    m_parser.addOption(m_fftwfWisdomOption);
 }
 
 MainParser::~MainParser()
@@ -78,5 +86,24 @@ void MainParser::parse(const QCoreApplication& app)
         m_serverPort = serverPort;
     } else {
         qWarning() << "MainParser::parse: server port invalid. Defaulting to " << m_serverPort;
+    }
+
+    // FFTWF wisdom file
+
+    m_fftwfWindowFileName = m_parser.value(m_fftwfWisdomOption);
+
+    // MIMO - from version
+
+    QStringList versionParts = app.applicationVersion().split(".");
+
+    if (versionParts.size() > 0)
+    {
+        bool ok;
+        int maj = versionParts.at(0).toInt(&ok);
+        m_mimoSupport = ok && (maj > 4);
+    }
+    else
+    {
+        m_mimoSupport = false;
     }
 }

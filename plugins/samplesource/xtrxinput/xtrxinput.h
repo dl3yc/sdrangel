@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,7 +30,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class XTRXInputThread;
 struct DeviceXTRXParams;
 class FileRecord;
@@ -189,7 +190,7 @@ public:
         { }
     };
 
-    XTRXInput(DeviceSourceAPI *deviceAPI);
+    XTRXInput(DeviceAPI *deviceAPI);
     virtual ~XTRXInput();
     virtual void destroy();
 
@@ -205,6 +206,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     virtual const QString& getDeviceDescription() const;
     virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
     uint32_t getDevSampleRate() const;
     uint32_t getLog2HardDecim() const;
     double getClockGen() const;
@@ -236,6 +238,20 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const XTRXInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            XTRXInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     std::size_t getChannelIndex();
     void getLORange(float& minF, float& maxF, float& stepF) const;
     void getSRRange(float& minF, float& maxF, float& stepF) const;
@@ -247,7 +263,7 @@ public:
     void apply_gain_pga(double gain);
 
 private:
-    DeviceSourceAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
     QMutex m_mutex;
     XTRXInputSettings m_settings;
     XTRXInputThread* m_XTRXInputThread;
@@ -267,7 +283,6 @@ private:
     void suspendTxThread();
     void resumeTxThread();
     bool applySettings(const XTRXInputSettings& settings, bool force = false, bool forceNCOFrequency = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const XTRXInputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const XTRXInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,6 +19,7 @@
 
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include <libhackrf/hackrf.h>
 
@@ -27,8 +29,7 @@
 #include "gui/basicdevicesettingsdialog.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
-#include "device/devicesourceapi.h"
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "hackrf/devicehackrfvalues.h"
 
@@ -39,19 +40,20 @@ HackRFInputGui::HackRFInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	ui(new Ui::HackRFInputGui),
 	m_deviceUISet(deviceUISet),
 	m_settings(),
+    m_sampleRateMode(true),
 	m_forceSettings(true),
 	m_doApplySettings(true),
 	m_sampleSource(NULL),
-	m_lastEngineState(DSPDeviceSourceEngine::StNotStarted)
+	m_lastEngineState(DeviceAPI::StNotStarted)
 {
-    m_sampleSource = (HackRFInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_sampleSource = (HackRFInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
     ui->setupUi(this);
 	ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
 	ui->centerFrequency->setValueRange(7, 0U, 7250000U);
 
     ui->sampleRate->setColorMapper(ColorMapper(ColorMapper::GrayGreenYellow));
-    ui->sampleRate->setValueRange(8, 2600000U, 20000000U);
+    ui->sampleRate->setValueRange(8, 1000000U, 20000000U);
 
 	connect(&m_updateTimer, SIGNAL(timeout()), this, SLOT(updateHardware()));
 	connect(&m_statusTimer, SIGNAL(timeout()), this, SLOT(updateStatus()));
@@ -59,6 +61,9 @@ HackRFInputGui::HackRFInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
 	displaySettings();
 	displayBandwidths();
@@ -154,6 +159,23 @@ bool HackRFInputGui::handleMessage(const Message& message)
 
         return true;
     }
+    else if (HackRFInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const HackRFInput::MsgFileRecord& notif = (const HackRFInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
     else
     {
         return false;
@@ -192,29 +214,85 @@ void HackRFInputGui::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateText->setText(QString("%1k").arg(QString::number(m_sampleRate/1000.0, 'g', 5)));
+    displaySampleRate();
+}
+
+void HackRFInputGui::updateFrequencyLimits()
+{
+    // values in kHz
+    qint64 deltaFrequency = m_settings.m_transverterMode ? m_settings.m_transverterDeltaFrequency/1000 : 0;
+    qint64 minLimit = (0U) + deltaFrequency;
+    qint64 maxLimit = (7250000U) + deltaFrequency;
+
+    minLimit = minLimit < 0 ? 0 : minLimit > 9999999 ? 9999999 : minLimit;
+    maxLimit = maxLimit < 0 ? 0 : maxLimit > 9999999 ? 9999999 : maxLimit;
+
+    qDebug("HackRFInputGui::updateFrequencyLimits: delta: %lld min: %lld max: %lld", deltaFrequency, minLimit, maxLimit);
+
+    ui->centerFrequency->setValueRange(7, minLimit, maxLimit);
+}
+
+void HackRFInputGui::displaySampleRate()
+{
+    ui->sampleRate->blockSignals(true);
+    displayFcTooltip();
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, 1000000U, 20000000U);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, 1000000U/(1<<m_settings.m_log2Decim), 20000000U/(1<<m_settings.m_log2Decim));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
+void HackRFInputGui::displayFcTooltip()
+{
+    int32_t fShift = DeviceSampleSource::calculateFrequencyShift(
+        m_settings.m_log2Decim,
+        (DeviceSampleSource::fcPos_t) m_settings.m_fcPos,
+        m_settings.m_devSampleRate,
+        DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD
+    );
+    ui->fcPos->setToolTip(tr("Relative position of device center frequency: %1 kHz").arg(QString::number(fShift / 1000.0f, 'g', 5)));
 }
 
 void HackRFInputGui::displaySettings()
 {
     blockApplySettings(true);
 
-	ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
+    ui->transverter->setDeltaFrequency(m_settings.m_transverterDeltaFrequency);
+    ui->transverter->setDeltaFrequencyActive(m_settings.m_transverterMode);
 
+    updateFrequencyLimits();
+
+	ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
 	ui->LOppm->setValue(m_settings.m_LOppmTenths);
 	ui->LOppmText->setText(QString("%1").arg(QString::number(m_settings.m_LOppmTenths/10.0, 'f', 1)));
-
 	ui->dcOffset->setChecked(m_settings.m_dcBlock);
 	ui->iqImbalance->setChecked(m_settings.m_iqCorrection);
 
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
 	ui->biasT->setChecked(m_settings.m_biasT);
-
 	ui->decim->setCurrentIndex(m_settings.m_log2Decim);
-
 	ui->fcPos->setCurrentIndex((int) m_settings.m_fcPos);
-
 	ui->lnaExt->setChecked(m_settings.m_lnaExt);
 	ui->lnaGainText->setText(tr("%1dB").arg(m_settings.m_lnaGain));
 	ui->lna->setValue(m_settings.m_lnaGain);
@@ -276,12 +354,6 @@ void HackRFInputGui::on_iqImbalance_toggled(bool checked)
 	sendSettings();
 }
 
-void HackRFInputGui::on_linkTxFreq_toggled(bool checked)
-{
-    m_settings.m_linkTxFrequency = checked;
-    sendSettings();
-}
-
 void HackRFInputGui::on_bbFilter_currentIndexChanged(int index)
 {
     int newBandwidth = HackRFBandwidths::getBandwidth(index);
@@ -310,29 +382,37 @@ void HackRFInputGui::on_centerFrequency_changed(quint64 value)
 void HackRFInputGui::on_sampleRate_changed(quint64 value)
 {
     m_settings.m_devSampleRate = value;
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Decim;
+    }
+
+    displayFcTooltip();
     sendSettings();
 }
 
 void HackRFInputGui::on_decim_currentIndexChanged(int index)
 {
-	if ((index <0) || (index > 6))
+	if ((index <0) || (index > 6)) {
 		return;
+    }
+
 	m_settings.m_log2Decim = index;
-	sendSettings();
+    displaySampleRate();
+    m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Decim;
+    }
+
+    sendSettings();
 }
 
 void HackRFInputGui::on_fcPos_currentIndexChanged(int index)
 {
-	if (index == 0) {
-		m_settings.m_fcPos = HackRFInputSettings::FC_POS_INFRA;
-		sendSettings();
-	} else if (index == 1) {
-		m_settings.m_fcPos = HackRFInputSettings::FC_POS_SUPRA;
-		sendSettings();
-	} else if (index == 2) {
-		m_settings.m_fcPos = HackRFInputSettings::FC_POS_CENTER;
-		sendSettings();
-	}
+    m_settings.m_fcPos = (HackRFInputSettings::fcPos_t) (index < 0 ? 0 : index > 2 ? 2 : index);
+    displayFcTooltip();
+    sendSettings();
 }
 
 void HackRFInputGui::on_lna_valueChanged(int value)
@@ -376,6 +456,12 @@ void HackRFInputGui::on_record_toggled(bool checked)
     m_sampleSource->getInputMessageQueue()->push(message);
 }
 
+void HackRFInputGui::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
 void HackRFInputGui::updateHardware()
 {
     if (m_doApplySettings)
@@ -388,6 +474,16 @@ void HackRFInputGui::updateHardware()
     }
 }
 
+void HackRFInputGui::on_transverter_clicked()
+{
+    m_settings.m_transverterMode = ui->transverter->getDeltaFrequencyAcive();
+    m_settings.m_transverterDeltaFrequency = ui->transverter->getDeltaFrequency();
+    qDebug("HackRFInputGui::on_transverter_clicked: %lld Hz %s", m_settings.m_transverterDeltaFrequency, m_settings.m_transverterMode ? "on" : "off");
+    updateFrequencyLimits();
+    m_settings.m_centerFrequency = ui->centerFrequency->getValueNew()*1000;
+    sendSettings();
+}
+
 void HackRFInputGui::blockApplySettings(bool block)
 {
     m_doApplySettings = !block;
@@ -395,25 +491,25 @@ void HackRFInputGui::blockApplySettings(bool block)
 
 void HackRFInputGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSourceEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSourceEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 ui->startStop->setChecked(false);
                 break;
-            case DSPDeviceSourceEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSourceEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -440,4 +536,30 @@ void HackRFInputGui::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void HackRFInputGui::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

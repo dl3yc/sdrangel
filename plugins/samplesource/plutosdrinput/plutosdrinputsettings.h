@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -67,6 +68,9 @@ struct PlutoSDRInputSettings {
     fcPos_t m_fcPos;
     bool    m_dcBlock;
     bool    m_iqCorrection;
+    bool    m_hwBBDCBlock;     //!< Hardware baseband DC blocking
+    bool    m_hwRFDCBlock;     //!< Hardware RF DC blocking
+    bool    m_hwIQCorrection;  //!< Hardware IQ correction
     quint32 m_log2Decim;
     quint32 m_lpfBW;           //!< analog lowpass filter bandwidth (Hz)
     quint32 m_gain;            //!< "hardware" gain

@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,7 +25,7 @@
 #include <QSet>
 #include <QDebug>
 
-const float AudioDeviceManager::m_defaultAudioInputVolume = 0.15f;
+const float AudioDeviceManager::m_defaultAudioInputVolume = 1.0f;
 const QString AudioDeviceManager::m_defaultUDPAddress = "127.0.0.1";
 const QString AudioDeviceManager::m_defaultDeviceName = "System default device";
 
@@ -86,6 +87,9 @@ AudioDeviceManager::AudioDeviceManager()
     for (int i = 0; i < m_outputDevicesInfo.size(); i++) {
         qDebug("AudioDeviceManager::AudioDeviceManager: output device #%d: %s", i, qPrintable(m_outputDevicesInfo[i].deviceName()));
     }
+
+    m_defaultInputStarted = false;
+    m_defaultOutputStarted = false;
 }
 
 AudioDeviceManager::~AudioDeviceManager()
@@ -253,7 +257,9 @@ void AudioDeviceManager::addAudioSink(AudioFifo* audioFifo, MessageQueue *sample
         m_audioOutputs[outputDeviceIndex] = new AudioOutput();
     }
 
-    if (m_audioOutputs[outputDeviceIndex]->getNbFifos() == 0) {
+    if ((m_audioOutputs[outputDeviceIndex]->getNbFifos() == 0) &&
+       ((outputDeviceIndex != -1) || !m_defaultOutputStarted))
+    {
         startAudioOutput(outputDeviceIndex);
     }
 
@@ -292,7 +298,7 @@ void AudioDeviceManager::removeAudioSink(AudioFifo* audioFifo)
     int audioOutputDeviceIndex = m_audioSinkFifos[audioFifo];
     m_audioOutputs[audioOutputDeviceIndex]->removeFifo(audioFifo);
 
-    if (m_audioOutputs[audioOutputDeviceIndex]->getNbFifos() == 0) {
+    if ((audioOutputDeviceIndex != -1) && (m_audioOutputs[audioOutputDeviceIndex]->getNbFifos() == 0)) {
         stopAudioOutput(audioOutputDeviceIndex);
     }
 
@@ -309,7 +315,9 @@ void AudioDeviceManager::addAudioSource(AudioFifo* audioFifo, MessageQueue *samp
         m_audioInputs[inputDeviceIndex] = new AudioInput();
     }
 
-    if (m_audioInputs[inputDeviceIndex]->getNbFifos() == 0) {
+    if ((m_audioInputs[inputDeviceIndex]->getNbFifos() == 0) &&
+       ((inputDeviceIndex != -1) || !m_defaultInputStarted))
+    {
         startAudioInput(inputDeviceIndex);
     }
 
@@ -346,7 +354,7 @@ void AudioDeviceManager::removeAudioSource(AudioFifo* audioFifo)
     int audioInputDeviceIndex = m_audioSourceFifos[audioFifo];
     m_audioInputs[audioInputDeviceIndex]->removeFifo(audioFifo);
 
-    if (m_audioInputs[audioInputDeviceIndex]->getNbFifos() == 0) {
+    if ((audioInputDeviceIndex != -1) && (m_audioInputs[audioInputDeviceIndex]->getNbFifos() == 0)) {
         stopAudioInput(audioInputDeviceIndex);
     }
 
@@ -401,6 +409,7 @@ void AudioDeviceManager::startAudioOutput(int outputDeviceIndex)
         m_audioOutputInfos[deviceName].udpChannelMode = udpChannelMode;
         m_audioOutputInfos[deviceName].udpChannelCodec = udpChannelCodec;
         m_audioOutputInfos[deviceName].udpDecimationFactor = decimationFactor;
+        m_defaultOutputStarted = (outputDeviceIndex == -1);
     }
     else
     {
@@ -436,6 +445,7 @@ void AudioDeviceManager::startAudioInput(int inputDeviceIndex)
         m_audioInputs[inputDeviceIndex]->setVolume(volume);
         m_audioInputInfos[deviceName].sampleRate = m_audioInputs[inputDeviceIndex]->getRate();
         m_audioInputInfos[deviceName].volume = volume;
+        m_defaultInputStarted = (inputDeviceIndex == -1);
     }
     else
     {
@@ -493,7 +503,15 @@ int AudioDeviceManager::getInputSampleRate(int inputDeviceIndex)
     }
     else
     {
-        return deviceInfo.sampleRate;
+        if (deviceInfo.sampleRate > 0)
+        {
+            return deviceInfo.sampleRate;
+        }
+        else
+        {
+            qDebug("AudioDeviceManager::getInputSampleRate: device %s has invalid sample rate", qPrintable(deviceName));
+            return m_defaultAudioSampleRate;
+        }
     }
 }
 
@@ -516,7 +534,15 @@ int AudioDeviceManager::getOutputSampleRate(int outputDeviceIndex)
     }
     else
     {
-        return deviceInfo.sampleRate;
+        if (deviceInfo.sampleRate > 0)
+        {
+            return deviceInfo.sampleRate;
+        }
+        else
+        {
+            qDebug("AudioDeviceManager::getOutputSampleRate: device %s has invalid sample rate", qPrintable(deviceName));
+            return m_defaultAudioSampleRate;
+        }
     }
 }
 
@@ -557,7 +583,7 @@ void AudioDeviceManager::setInputDeviceInfo(int inputDeviceIndex, const InputDev
 
         for (; it != m_inputDeviceSourceMessageQueues[inputDeviceIndex].end(); ++it)
         {
-            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioInputInfos[deviceName].sampleRate);
+            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioInputInfos[deviceName].sampleRate, DSPConfigureAudio::AudioInput);
             (*it)->push(msg);
         }
     }
@@ -604,7 +630,7 @@ void AudioDeviceManager::setOutputDeviceInfo(int outputDeviceIndex, const Output
 
         for (; it != m_outputDeviceSinkMessageQueues[outputDeviceIndex].end(); ++it)
         {
-            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioOutputInfos[deviceName].sampleRate);
+            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioOutputInfos[deviceName].sampleRate, DSPConfigureAudio::AudioOutput);
             (*it)->push(msg);
         }
     }
@@ -654,7 +680,7 @@ void AudioDeviceManager::unsetOutputDeviceInfo(int outputDeviceIndex)
 
         for (; it != m_outputDeviceSinkMessageQueues[outputDeviceIndex].end(); ++it)
         {
-            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioOutputInfos[deviceName].sampleRate);
+            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioOutputInfos[deviceName].sampleRate, DSPConfigureAudio::AudioOutput);
             (*it)->push(msg);
         }
     }
@@ -694,7 +720,7 @@ void AudioDeviceManager::unsetInputDeviceInfo(int inputDeviceIndex)
 
         for (; it != m_inputDeviceSourceMessageQueues[inputDeviceIndex].end(); ++it)
         {
-            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioInputInfos[deviceName].sampleRate);
+            DSPConfigureAudio *msg = new DSPConfigureAudio(m_audioInputInfos[deviceName].sampleRate, DSPConfigureAudio::AudioInput);
             (*it)->push(msg);
         }
     }

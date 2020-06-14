@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,10 +25,13 @@
 #include "udpsourcegui.h"
 #endif
 #include "udpsource.h"
+#include "udpsourcewebapiadapter.h"
+#include "udpsourceplugin.h"
 
 const PluginDescriptor UDPSourcePlugin::m_pluginDescriptor = {
+    UDPSource::m_channelId,
 	QString("UDP Channel Source"),
-	QString("4.3.2"),
+	QString("4.14.6"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -55,26 +59,29 @@ void UDPSourcePlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* UDPSourcePlugin::createTxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSource *txChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSource *txChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* UDPSourcePlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel)
+PluginInstanceGUI* UDPSourcePlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const
 {
     return UDPSourceGUI::create(m_pluginAPI, deviceUISet, txChannel);
 }
 #endif
 
-BasebandSampleSource* UDPSourcePlugin::createTxChannelBS(DeviceSinkAPI *deviceAPI)
+BasebandSampleSource* UDPSourcePlugin::createTxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new UDPSource(deviceAPI);
 }
 
-ChannelSourceAPI* UDPSourcePlugin::createTxChannelCS(DeviceSinkAPI *deviceAPI)
+ChannelAPI* UDPSourcePlugin::createTxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new UDPSource(deviceAPI);
 }
 
-
+ChannelWebAPIAdapter* UDPSourcePlugin::createChannelWebAPIAdapter() const
+{
+	return new UDPSourceWebAPIAdapter();
+}

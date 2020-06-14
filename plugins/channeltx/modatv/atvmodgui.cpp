@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,17 +24,18 @@
 
 #include <cmath>
 
-#include "device/devicesinkapi.h"
 #include "device/deviceuiset.h"
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
 #include "dsp/dspengine.h"
 #include "util/db.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "mainwindow.h"
 
 #include "ui_atvmodgui.h"
 #include "atvmodgui.h"
+#include "atvmodreport.h"
 
 ATVModGUI* ATVModGUI::create(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx)
 {
@@ -44,6 +46,80 @@ ATVModGUI* ATVModGUI::create(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Bas
 void ATVModGUI::destroy()
 {
     delete this;
+}
+
+ATVModGUI::ATVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx, QWidget* parent) :
+	RollupWidget(parent),
+	ui(new Ui::ATVModGUI),
+	m_pluginAPI(pluginAPI),
+	m_deviceUISet(deviceUISet),
+	m_channelMarker(this),
+	m_doApplySettings(true),
+    m_videoLength(0),
+    m_videoFrameRate(48000),
+    m_frameCount(0),
+    m_tickCount(0),
+    m_enableNavTime(false),
+    m_camBusyFPSMessageBox(0),
+    m_rfSliderDivisor(100000)
+{
+	ui->setupUi(this);
+	setAttribute(Qt::WA_DeleteOnClose, true);
+	connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
+	connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
+
+	m_atvMod = (ATVMod*) channelTx; //new ATVMod(m_deviceUISet->m_deviceSinkAPI);
+	m_atvMod->setMessageQueueToGUI(getInputMessageQueue());
+    m_atvMod->propagateMessageQueueToGUI();
+
+	connect(&MainWindow::getInstance()->getMasterTimer(), SIGNAL(timeout()), this, SLOT(tick()));
+
+    ui->deltaFrequencyLabel->setText(QString("%1f").arg(QChar(0x94, 0x03)));
+    ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
+    ui->deltaFrequency->setValueRange(false, 7, -9999999, 9999999);
+
+    m_channelMarker.blockSignals(true);
+	m_channelMarker.setColor(m_settings.m_rgbColor);
+	m_channelMarker.setBandwidth(5000);
+	m_channelMarker.setCenterFrequency(0);
+	m_channelMarker.setTitle("ATV Modulator");
+    m_channelMarker.setSourceOrSinkStream(false);
+	m_channelMarker.blockSignals(false);
+	m_channelMarker.setVisible(true); // activate signal on the last setting only
+
+    setTitleColor(m_channelMarker.getColor());
+    m_settings.setChannelMarker(&m_channelMarker);
+
+	m_deviceUISet->registerTxChannelInstance(ATVMod::m_channelIdURI, this);
+	m_deviceUISet->addChannelMarker(&m_channelMarker);
+	m_deviceUISet->addRollupWidget(this);
+
+	connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
+
+    resetToDefaults();
+
+	connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
+    m_atvMod->setLevelMeter(ui->volumeMeter);
+
+    std::vector<int> cameraNumbers;
+    m_atvMod->getCameraNumbers(cameraNumbers);
+
+    for (std::vector<int>::iterator it = cameraNumbers.begin(); it != cameraNumbers.end(); ++it) {
+        ui->camSelect->addItem(tr("%1").arg(*it));
+    }
+
+    QChar delta = QChar(0x94, 0x03);
+    ui->fmExcursionLabel->setText(delta);
+
+    displaySettings();
+    applySettings(true);
+}
+
+ATVModGUI::~ATVModGUI()
+{
+    m_deviceUISet->removeTxChannelInstance(this);
+	delete m_atvMod; // TODO: check this: when the GUI closes it has to delete the modulator
+	delete ui;
 }
 
 void ATVModGUI::setName(const QString& name)
@@ -95,23 +171,23 @@ bool ATVModGUI::deserialize(const QByteArray& data)
 
 bool ATVModGUI::handleMessage(const Message& message)
 {
-    if (ATVMod::MsgReportVideoFileSourceStreamData::match(message))
+    if (ATVModReport::MsgReportVideoFileSourceStreamData::match(message))
     {
-        m_videoFrameRate = ((ATVMod::MsgReportVideoFileSourceStreamData&)message).getFrameRate();
-        m_videoLength = ((ATVMod::MsgReportVideoFileSourceStreamData&)message).getVideoLength();
+        m_videoFrameRate = ((ATVModReport::MsgReportVideoFileSourceStreamData&)message).getFrameRate();
+        m_videoLength = ((ATVModReport::MsgReportVideoFileSourceStreamData&)message).getVideoLength();
         m_frameCount = 0;
         updateWithStreamData();
         return true;
     }
-    else if (ATVMod::MsgReportVideoFileSourceStreamTiming::match(message))
+    else if (ATVModReport::MsgReportVideoFileSourceStreamTiming::match(message))
     {
-        m_frameCount = ((ATVMod::MsgReportVideoFileSourceStreamTiming&)message).getFrameCount();
+        m_frameCount = ((ATVModReport::MsgReportVideoFileSourceStreamTiming&)message).getFrameCount();
         updateWithStreamTime();
         return true;
     }
-    else if (ATVMod::MsgReportCameraData::match(message))
+    else if (ATVModReport::MsgReportCameraData::match(message))
     {
-        ATVMod::MsgReportCameraData& rpt = (ATVMod::MsgReportCameraData&) message;
+        ATVModReport::MsgReportCameraData& rpt = (ATVModReport::MsgReportCameraData&) message;
         ui->cameraDeviceNumber->setText(tr("#%1").arg(rpt.getdeviceNumber()));
         ui->camerFPS->setText(tr("%1 FPS").arg(rpt.getFPS(), 0, 'f', 2));
         ui->cameraImageSize->setText(tr("%1x%2").arg(rpt.getWidth()).arg(rpt.getHeight()));
@@ -141,10 +217,10 @@ bool ATVModGUI::handleMessage(const Message& message)
 
     	return true;
     }
-    else if (ATVMod::MsgReportEffectiveSampleRate::match(message))
+    else if (ATVModReport::MsgReportEffectiveSampleRate::match(message))
     {
-        int sampleRate = ((ATVMod::MsgReportEffectiveSampleRate&)message).getSampleRate();
-        uint32_t nbPointsPerLine = ((ATVMod::MsgReportEffectiveSampleRate&)message).gatNbPointsPerLine();
+        int sampleRate = ((ATVModReport::MsgReportEffectiveSampleRate&)message).getSampleRate();
+        uint32_t nbPointsPerLine = ((ATVModReport::MsgReportEffectiveSampleRate&)message).gatNbPointsPerLine();
         ui->channelSampleRateText->setText(tr("%1k").arg(sampleRate/1000.0f, 0, 'f', 2));
         ui->nbPointsPerLineText->setText(tr("%1p").arg(nbPointsPerLine));
         setRFFiltersSlidersRange(sampleRate);
@@ -614,101 +690,48 @@ void ATVModGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void ATVModGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
-}
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_atvMod->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
 
-ATVModGUI::ATVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx, QWidget* parent) :
-	RollupWidget(parent),
-	ui(new Ui::ATVModGUI),
-	m_pluginAPI(pluginAPI),
-	m_deviceUISet(deviceUISet),
-	m_channelMarker(this),
-	m_doApplySettings(true),
-    m_videoLength(0),
-    m_videoFrameRate(48000),
-    m_frameCount(0),
-    m_tickCount(0),
-    m_enableNavTime(false),
-    m_camBusyFPSMessageBox(0),
-    m_rfSliderDivisor(100000)
-{
-	ui->setupUi(this);
-	setAttribute(Qt::WA_DeleteOnClose, true);
-	connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
-	connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
-
-	m_atvMod = (ATVMod*) channelTx; //new ATVMod(m_deviceUISet->m_deviceSinkAPI);
-	m_atvMod->setMessageQueueToGUI(getInputMessageQueue());
-
-	connect(&MainWindow::getInstance()->getMasterTimer(), SIGNAL(timeout()), this, SLOT(tick()));
-
-    ui->deltaFrequencyLabel->setText(QString("%1f").arg(QChar(0x94, 0x03)));
-    ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
-    ui->deltaFrequency->setValueRange(false, 7, -9999999, 9999999);
-
-    m_channelMarker.blockSignals(true);
-	m_channelMarker.setColor(m_settings.m_rgbColor);
-	m_channelMarker.setBandwidth(5000);
-	m_channelMarker.setCenterFrequency(0);
-	m_channelMarker.setTitle("ATV Modulator");
-	m_channelMarker.blockSignals(false);
-	m_channelMarker.setVisible(true); // activate signal on the last setting only
-
-    setTitleColor(m_channelMarker.getColor());
-    m_settings.setChannelMarker(&m_channelMarker);
-
-	m_deviceUISet->registerTxChannelInstance(ATVMod::m_channelIdURI, this);
-	m_deviceUISet->addChannelMarker(&m_channelMarker);
-	m_deviceUISet->addRollupWidget(this);
-
-	connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
-
-    resetToDefaults();
-
-	connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
-    connect(m_atvMod, SIGNAL(levelChanged(qreal, qreal, int)), ui->volumeMeter, SLOT(levelChanged(qreal, qreal, int)));
-
-    std::vector<int> cameraNumbers;
-    m_atvMod->getCameraNumbers(cameraNumbers);
-
-    for (std::vector<int>::iterator it = cameraNumbers.begin(); it != cameraNumbers.end(); ++it) {
-        ui->camSelect->addItem(tr("%1").arg(*it));
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
     }
 
-    QChar delta = QChar(0x94, 0x03);
-    ui->fmExcursionLabel->setText(delta);
-
-    displaySettings();
-    applySettings(true);
-}
-
-ATVModGUI::~ATVModGUI()
-{
-    m_deviceUISet->removeTxChannelInstance(this);
-	delete m_atvMod; // TODO: check this: when the GUI closes it has to delete the modulator
-	delete ui;
+    resetContextMenuType();
 }
 
 void ATVModGUI::blockApplySettings(bool block)
@@ -720,7 +743,7 @@ void ATVModGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-		ATVMod::MsgConfigureChannelizer *msgChan = ATVMod::MsgConfigureChannelizer::create(
+		ATVMod::MsgConfigureSourceCenterFrequency *msgChan = ATVMod::MsgConfigureSourceCenterFrequency::create(
 		        m_channelMarker.getCenterFrequency());
         m_atvMod->getInputMessageQueue()->push(msgChan);
 
@@ -740,6 +763,7 @@ void ATVModGUI::displaySettings()
 
     setTitleColor(m_settings.m_rgbColor);
     setWindowTitle(m_channelMarker.getTitle());
+    displayStreamIndex();
 
     blockApplySettings(true);
 
@@ -786,6 +810,15 @@ void ATVModGUI::displaySettings()
     ui->playLoop->setChecked(m_settings.m_videoPlayLoop);
 
     blockApplySettings(false);
+}
+
+void ATVModGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void ATVModGUI::leaveEvent(QEvent*)

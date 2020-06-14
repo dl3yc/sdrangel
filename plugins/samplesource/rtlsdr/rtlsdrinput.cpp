@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -26,10 +27,11 @@
 #include "SWGRtlSdrSettings.h"
 #include "SWGDeviceState.h"
 #include "SWGDeviceReport.h"
+#include "SWGDeviceActions.h"
 #include "SWGRtlSdrReport.h"
 
 #include "rtlsdrinput.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "rtlsdrthread.h"
 #include "dsp/dspcommands.h"
 #include "dsp/dspengine.h"
@@ -48,7 +50,7 @@ const int RTLSDRInput::sampleRateLowRangeMax = 300000U;
 const int RTLSDRInput::sampleRateHighRangeMin = 950000U;
 const int RTLSDRInput::sampleRateHighRangeMax = 2400000U;
 
-RTLSDRInput::RTLSDRInput(DeviceSourceAPI *deviceAPI) :
+RTLSDRInput::RTLSDRInput(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
 	m_settings(),
 	m_dev(0),
@@ -59,7 +61,8 @@ RTLSDRInput::RTLSDRInput(DeviceSourceAPI *deviceAPI) :
     openDevice();
 
     m_fileSink = new FileRecord(QString("test_%1.sdriq").arg(m_deviceAPI->getDeviceUID()));
-    m_deviceAPI->addSink(m_fileSink);
+    m_deviceAPI->setNbSourceStreams(1);
+    m_deviceAPI->addAncillarySink(m_fileSink);
 
     m_networkManager = new QNetworkAccessManager();
     connect(m_networkManager, SIGNAL(finished(QNetworkReply*)), this, SLOT(networkManagerFinished(QNetworkReply*)));
@@ -74,7 +77,7 @@ RTLSDRInput::~RTLSDRInput()
         stop();
     }
 
-    m_deviceAPI->removeSink(m_fileSink);
+    m_deviceAPI->removeAncillarySink(m_fileSink);
     delete m_fileSink;
 
     closeDevice();
@@ -106,7 +109,7 @@ bool RTLSDRInput::openDevice()
 
     int device;
 
-    if ((device = rtlsdr_get_index_by_serial(qPrintable(m_deviceAPI->getSampleSourceSerial()))) < 0)
+    if ((device = rtlsdr_get_index_by_serial(qPrintable(m_deviceAPI->getSamplingDeviceSerial()))) < 0)
     {
         qCritical("RTLSDRInput::openDevice: could not get RTLSDR serial number");
         return false;
@@ -343,13 +346,13 @@ bool RTLSDRInput::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initAcquisition()) {
-                m_deviceAPI->startAcquisition();
+            if (m_deviceAPI->initDeviceEngine()) {
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopAcquisition();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         if (m_settings.m_useReverseAPI) {
@@ -377,20 +380,6 @@ bool RTLSDRInput::applySettings(const RTLSDRSettings& settings, bool force)
             qCritical("RTLSDRInput::applySettings: could not set AGC mode %s", settings.m_agc ? "on" : "off");
         } else {
             qDebug("RTLSDRInput::applySettings: AGC mode %s", settings.m_agc ? "on" : "off");
-        }
-    }
-
-    if ((m_settings.m_gain != settings.m_gain) || force)
-    {
-        reverseAPIKeys.append("gain");
-
-        if(m_dev != 0)
-        {
-            if (rtlsdr_set_tuner_gain(m_dev, settings.m_gain) != 0) {
-                qCritical("RTLSDRInput::applySettings: rtlsdr_set_tuner_gain() failed");
-            } else {
-                qDebug("RTLSDRInput::applySettings: rtlsdr_set_tuner_gain() to %d", settings.m_gain);
-            }
         }
     }
 
@@ -489,6 +478,7 @@ bool RTLSDRInput::applySettings(const RTLSDRSettings& settings, bool force)
                 settings.m_log2Decim,
                 (DeviceSampleSource::fcPos_t) settings.m_fcPos,
                 settings.m_devSampleRate,
+                DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD,
                 settings.m_transverterMode);
 
         forwardChange = true;
@@ -549,6 +539,19 @@ bool RTLSDRInput::applySettings(const RTLSDRSettings& settings, bool force)
         }
     }
 
+    if ((m_settings.m_gain != settings.m_gain) || force)
+    {
+        reverseAPIKeys.append("gain");
+
+        if(m_dev != 0)
+        {
+            if (rtlsdr_set_tuner_gain(m_dev, settings.m_gain) != 0) {
+                qCritical("RTLSDRInput::applySettings: rtlsdr_set_tuner_gain() failed");
+            } else {
+                qDebug("RTLSDRInput::applySettings: rtlsdr_set_tuner_gain() to %d", settings.m_gain);
+            }
+        }
+    }
 
     if (settings.m_useReverseAPI)
     {
@@ -596,7 +599,26 @@ int RTLSDRInput::webapiSettingsPutPatch(
 {
     (void) errorMessage;
     RTLSDRSettings settings = m_settings;
+    webapiUpdateDeviceSettings(settings, deviceSettingsKeys, response);
 
+    MsgConfigureRTLSDR *msg = MsgConfigureRTLSDR::create(settings, force);
+    m_inputMessageQueue.push(msg);
+
+    if (m_guiMessageQueue) // forward to GUI if any
+    {
+        MsgConfigureRTLSDR *msgToGUI = MsgConfigureRTLSDR::create(settings, force);
+        m_guiMessageQueue->push(msgToGUI);
+    }
+
+    webapiFormatDeviceSettings(response, settings);
+    return 200;
+}
+
+void RTLSDRInput::webapiUpdateDeviceSettings(
+        RTLSDRSettings& settings,
+        const QStringList& deviceSettingsKeys,
+        SWGSDRangel::SWGDeviceSettings& response)
+{
     if (deviceSettingsKeys.contains("agc")) {
         settings.m_agc = response.getRtlSdrSettings()->getAgc() != 0;
     }
@@ -657,23 +679,10 @@ int RTLSDRInput::webapiSettingsPutPatch(
     if (deviceSettingsKeys.contains("reverseAPIDeviceIndex")) {
         settings.m_reverseAPIDeviceIndex = response.getRtlSdrSettings()->getReverseApiDeviceIndex();
     }
-
-    MsgConfigureRTLSDR *msg = MsgConfigureRTLSDR::create(settings, force);
-    m_inputMessageQueue.push(msg);
-
-    if (m_guiMessageQueue) // forward to GUI if any
-    {
-        MsgConfigureRTLSDR *msgToGUI = MsgConfigureRTLSDR::create(settings, force);
-        m_guiMessageQueue->push(msgToGUI);
-    }
-
-    webapiFormatDeviceSettings(response, settings);
-    return 200;
 }
 
 void RTLSDRInput::webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const RTLSDRSettings& settings)
 {
-    qDebug("RTLSDRInput::webapiFormatDeviceSettings: m_lowSampleRate: %s", settings.m_lowSampleRate ? "true" : "false");
     response.getRtlSdrSettings()->setAgc(settings.m_agc ? 1 : 0);
     response.getRtlSdrSettings()->setCenterFrequency(settings.m_centerFrequency);
     response.getRtlSdrSettings()->setDcBlock(settings.m_dcBlock ? 1 : 0);
@@ -747,6 +756,37 @@ int RTLSDRInput::webapiReportGet(
     return 200;
 }
 
+int RTLSDRInput::webapiActionsPost(
+        const QStringList& deviceActionsKeys,
+        SWGSDRangel::SWGDeviceActions& query,
+        QString& errorMessage)
+{
+    SWGSDRangel::SWGRtlSdrActions *swgRtlSdrActions = query.getRtlSdrActions();
+
+    if (swgRtlSdrActions)
+    {
+        if (deviceActionsKeys.contains("record"))
+        {
+            bool record = swgRtlSdrActions->getRecord() != 0;
+            MsgFileRecord *msg = MsgFileRecord::create(record);
+            getInputMessageQueue()->push(msg);
+
+            if (getMessageQueueToGUI())
+            {
+                MsgFileRecord *msgToGUI = MsgFileRecord::create(record);
+                getMessageQueueToGUI()->push(msgToGUI);
+            }
+        }
+
+        return 202;
+    }
+    else
+    {
+        errorMessage = "Missing RtlSdrActions in query";
+        return 400;
+    }
+}
+
 void RTLSDRInput::webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response)
 {
     response.getRtlSdrReport()->setGains(new QList<SWGSDRangel::SWGGain*>);
@@ -761,8 +801,9 @@ void RTLSDRInput::webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& respons
 void RTLSDRInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const RTLSDRSettings& settings, bool force)
 {
     SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
-    swgDeviceSettings->setTx(0);
+    swgDeviceSettings->setDirection(0); // single Rx
     swgDeviceSettings->setDeviceHwType(new QString("RTLSDR"));
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
     swgDeviceSettings->setRtlSdrSettings(new SWGSDRangel::SWGRtlSdrSettings());
     SWGSDRangel::SWGRtlSdrSettings *swgRtlSdrSettings = swgDeviceSettings->getRtlSdrSettings();
 
@@ -824,30 +865,46 @@ void RTLSDRInput::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, 
     m_networkRequest.setUrl(QUrl(channelSettingsURL));
     m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QBuffer *buffer=new QBuffer();
+    QBuffer *buffer = new QBuffer();
     buffer->open((QBuffer::ReadWrite));
     buffer->write(swgDeviceSettings->asJson().toUtf8());
     buffer->seek(0);
 
     // Always use PATCH to avoid passing reverse API settings
-    m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    buffer->setParent(reply);
 
     delete swgDeviceSettings;
 }
 
 void RTLSDRInput::webapiReverseSendStartStop(bool start)
 {
+    SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
+    swgDeviceSettings->setDirection(0); // single Rx
+    swgDeviceSettings->setDeviceHwType(new QString("RTLSDR"));
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
+
     QString channelSettingsURL = QString("http://%1:%2/sdrangel/deviceset/%3/device/run")
             .arg(m_settings.m_reverseAPIAddress)
             .arg(m_settings.m_reverseAPIPort)
             .arg(m_settings.m_reverseAPIDeviceIndex);
     m_networkRequest.setUrl(QUrl(channelSettingsURL));
+    m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QBuffer *buffer = new QBuffer();
+    buffer->open((QBuffer::ReadWrite));
+    buffer->write(swgDeviceSettings->asJson().toUtf8());
+    buffer->seek(0);
+    QNetworkReply *reply;
 
     if (start) {
-        m_networkManager->sendCustomRequest(m_networkRequest, "POST");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "POST", buffer);
     } else {
-        m_networkManager->sendCustomRequest(m_networkRequest, "DELETE");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "DELETE", buffer);
     }
+
+    buffer->setParent(reply);
+    delete swgDeviceSettings;
 }
 
 void RTLSDRInput::networkManagerFinished(QNetworkReply *reply)
@@ -860,10 +917,13 @@ void RTLSDRInput::networkManagerFinished(QNetworkReply *reply)
                 << " error(" << (int) replyError
                 << "): " << replyError
                 << ": " << reply->errorString();
-        return;
+    }
+    else
+    {
+        QString answer = reply->readAll();
+        answer.chop(1); // remove last \n
+        qDebug("RTLSDRInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
     }
 
-    QString answer = reply->readAll();
-    answer.chop(1); // remove last \n
-    qDebug("RTLSDRInput::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    reply->deleteLater();
 }

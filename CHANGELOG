@@ -1,0 +1,1114 @@
+sdrangel (4.14.8-1) unstable; urgency=medium
+
+   * RTP audio: fixed codec setting when usinf REST API. Fixes #526
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 23 May 2020 23:01:15 +0200
+
+sdrangel (4.14.7-1) unstable; urgency=medium
+
+   * PlutoSDR: fixed handling of open device status. Fixes issue #510
+   * Prevent use of not existent devices. Fixes issue #510 partially
+   * Main GUI app: moved app creation after setting attributes. Fixes #522
+   * AudioDeviceManager: make sure a negative or null sample rate is never returned
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 20 May 2020 11:35:17 +0200
+
+sdrangel (4.14.6-1) unstable; urgency=medium
+
+   * Spectrum analyzer code reorganization
+   * FFTFactory: add mutex for thread safety. Implements issue #514
+   * SpectrumVis: release previous FFT engine allocation from FFT factory only if allocated once. Fixes issue #515
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 16 May 2020 06:35:17 +0200
+
+sdrangel (4.14.5-1) unstable; urgency=medium
+
+   * DATV demod: applied some recent changes in leansdr
+   * Fixed incorrect frequency display when transverter is engaged. Fixes issue #509
+   * ATV mod: Ubuntu 20.04 OpenCV code compatibility. Fixes issue #511
+   * Fixed some warnings from Mac ports compilation (2)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 28 Apr 2020 03:35:17 +0200
+
+sdrangel (4.14.4-1) unstable; urgency=medium
+
+  * XTRX: REST API: fixed wrong setting object
+  * XTRX: fixed sample rate setting
+  * XTRX: reduce block size to 4096 bytes
+  * LimeSDR: revised labels and tooltips for antenna select. Fixes issue #506
+  * LimeSDR: GUI: flip SR and Hw/Sw decimation or interpolation displays
+  * AM demod: fixed initialization of squelch counter. Fixes issue #502
+  * Make OpenCV optional in main cmake file. Fixes #503
+  * Fixed some warnings from Mac ports compilation
+  * Compile with c++11 comaptible version of CM256cc
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 20 Apr 2020 05:35:17 +0200
+
+sdrangel (4.14.3-1) unstable; urgency=medium
+
+  * Sample sources GUI file record: right click to choose file. Implements #483.
+  * BladeRF2: REST API: implemented actions (was missing)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 01 Apr 2020 19:05:22 +0200
+
+sdrangel (4.14.2-1) unstable; urgency=medium
+
+  * Removed cm256cc dependency and therefore remote plugins for Mac OS. Fixes #492
+  * REST API: removed useless SWGDevicesetApi files. Fixes #491
+  * BFM demod: added initialization of message to GUI address. Fixes #488
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 28 Mar 2020 19:05:22 +0100
+
+sdrangel (4.14.1-1) unstable; urgency=medium
+
+  * FFT factory with option to use fftwf wisdom file. Impements issue #482.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 16 Mar 2020 21:01:22 +0100
+
+sdrangel (4.14.0-1) unstable; urgency=medium
+
+  * REST API device and channel actions. Implements #485.
+  * LimeRFE USB: added cellular band 3 and improved API documentation
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 11 Mar 2020 15:14:22 +0100
+
+sdrangel (4.13.2-1) unstable; urgency=medium
+
+  * CI/CD implmentation with Appveyor
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 01 Mar 2020 05:14:22 +0100
+
+sdrangel (4.13.1-1) unstable; urgency=medium
+
+  * LimeRFE USB support: fixed attenuator and AM/FM notch settings
+  * FileSource: fixed various issues with settings with GUI and REST API. Fixes issue #481
+  * FFT: added Kaiser window with alpha factor at pi
+  * Removed librtlsdr in the list of dependencies in Debian install
+  * SoapySDR: fixed FindSoapySDR.cmake
+  * SoapySDR: Fix case-sensitive package check
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 26 Feb 2020 22:14:22 +0100
+
+sdrangel (4.13.0-1) unstable; urgency=medium
+
+  * LimeRFE USB support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 22 Jan 2020 12:14:22 +0100
+
+sdrangel (4.12.5-1) unstable; urgency=medium
+
+  * Removed MIMO plugins and related code
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 01 Jan 2020 06:14:22 +0100
+
+sdrangel (4.12.4-1) unstable; urgency=medium
+
+  * Debian build: moved librtlsdr to external libraries
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 17 Dec 2019 19:14:22 +0100
+
+sdrangel (4.12.3-1) unstable; urgency=medium
+
+  * Added possibility to specify devices that cannot be discovered automatically
+  * Server: fixed sink device set creation and added MIMO creation
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 15 Dec 2019 23:14:22 +0100
+
+sdrangel (4.12.2-1) unstable; urgency=medium
+
+  * Refactoring of Rx channels code with better separation of concerns
+  * ATV demod: complete refactoring
+  * Channel Analyzer: refactoring of classes and downsampling chain reorganization
+  * Remote Sink and Remote Output: refactoring of UDP blocks handling
+  * NFMDemod: fixed setSelectedCtcssIndex method
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 14 Dec 2019 06:14:22 +0100
+
+sdrangel (4.12.1-1) unstable; urgency=medium
+
+  * Tx plugins: further refactoring and fixes
+  * Scope: added DOA projections and updated ChannelAnalzyer
+  * Upgraded codec2 library to v0.9.2
+  * NFM demod: fixed audio FIFO fill
+  * Various changes to base classes for MIMO
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 19 Nov 2019 22:14:22 +0100
+
+sdrangel (4.12.0-1) unstable; urgency=medium
+
+  * Refactoring of Tx part with new FIFO and code reorganization
+  * Corrected network manager process memory leaks
+  * leansdr: fixes for macos
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 15 Nov 2019 00:14:22 +0100
+
+sdrangel (4.11.12-1) unstable; urgency=medium
+
+  * Test sink output plugin
+  * ChannelAnalyzer: set trace length to FFT length  when auto-correlation by IFFT is used
+  * Tx plugins: corrected FIFO begin iterator vs number of samples read
+  * GLSpectrum: set default window to Hanning
+  * More preparatory works for MIMO channels support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 01 Nov 2019 14:14:22 +0100
+
+sdrangel (4.11.11-1) unstable; urgency=medium
+
+  * Channel Analyzer polar grid option for XY display (Issue #424)
+  * Fixed MacOS build
+  * More preparatory works for MIMO channels support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 23 Oct 2019 20:14:22 +0200
+
+sdrangel (4.11.10-1) unstable; urgency=medium
+
+  * Plugins device enumeration optimization
+  * Scope: added possibility to change trace chunk size
+  * Upgraded to libbladerf 2019.07 release
+  * Added a config.py API script to scriptsapi folder
+  * Added sanity check in HackRF devices enumeration
+  * Device engines: stop device before channels when going idle
+  * Fixes to Flatpack build (PR #422)
+  * More preparatory works for MIMO channels support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 09 Oct 2019 05:14:22 +0200
+
+sdrangel (4.11.9-1) unstable; urgency=medium
+
+  * Fixed regression in v4.11.7 due to FIFO system
+  * Upgraded SerialDV. Removed unused attribute in LocalSink GUI
+  * Preparatory works for MIMO channels support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 10 Sep 2019 21:04:06 +0200
+
+sdrangel (4.11.8-1) unstable; urgency=medium
+
+  * HackRF: implemented transverter functionality
+  * FreeDV demod: fixed spectrum span and channel id
+  * RTL-SDR: RF bandwidth deserialization fix
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 31 Aug 2019 06:04:06 +0200
+
+sdrangel (4.11.7-1) unstable; urgency=medium
+
+  * GLSpectrum and GLScope: fixed possible issues with mutex handling
+  * Channel Analyzer: use FFTW engine with Hamming window for auto correlation
+  * Package build: use DSDcc v1.8.6 to fix issue #406 with DSD decoder
+  * Use a simplified version of sample FIFOs in the threaded baseband sample sink
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 24 Aug 2019 06:04:06 +0200
+
+sdrangel (4.11.6-1) unstable; urgency=medium
+
+  * REST API /sdrange/config endpoint with GET, PUT, PATCH. Implements #241
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 12 Aug 2019 05:04:06 +0200
+
+sdrangel (4.11.5-1) unstable; urgency=medium
+
+  * CW keyer from keyboard. Audio monitor AM, NFM, SSB modulators. Implements #385
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 30 Jul 2019 23:04:06 +0200
+
+sdrangel (4.11.4-1) unstable; urgency=medium
+
+  * DATV demod: option to output transport stream to UDP. Implements #313
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 28 Jul 2019 09:04:06 +0200
+
+sdrangel (4.11.3-1) unstable; urgency=medium
+
+  * PlutoSDR input: options for HW DC and IQ corrections. Implements #378
+  * DATV demod: fix DVB-S FEC 7/8 not recognized from the GUI. Fixes #383
+  * Fixed API request mapper validator not returning value in all cases. Fixes issue #386
+  * Corrected endif in cpack/CMakeLists.txt. Fixes #377
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 25 Jul 2019 21:04:06 +0200
+
+sdrangel (4.11.2-1) unstable; urgency=medium
+
+  * New AMBE devices support including AMBE servers
+  * Fixed closing main window with the corner X
+  * Fixed some typos here and there
+  * SSB mod: base audio compressor sample rate on audio sample rate
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 23 Jul 2019 21:04:06 +0200
+
+sdrangel (4.11.1-1) unstable; urgency=medium
+
+  * DATV demod: implemented DVB-S2 (experimental)
+  * SSB modulator: use real audio compressor with just an on off toggle
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 18 Jul 2019 00:04:06 +0200
+
+sdrangel (4.11.0-1) unstable; urgency=medium
+
+  * File Source channel plugin
+  * Flatpak build update
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 09 Jul 2019 23:04:06 +0200
+
+sdrangel (4.10.5-1) unstable; urgency=medium
+
+  * Windows: removed console display
+  * Fixed REST API issues in some plugins
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 05 Jul 2019 20:04:06 +0200
+
+sdrangel (4.10.4-1) unstable; urgency=medium
+
+  * Airspy: fixed sample rates auto detection
+  * Attempt to fix device user arguments processing. Issue #372
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 30 Jun 2019 02:04:06 +0200
+
+sdrangel (4.10.3-1) unstable; urgency=medium
+
+  * Windows build: fixed RTL-SDR support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 28 Jun 2019 20:44:06 +0200
+
+sdrangel (4.10.2-1) unstable; urgency=medium
+
+  * Windows MSVC with cmake build introduction
+  * Fixed BladeRF support with libbladeRF 2018.10-rc1
+  * Fixed possible missing dependencies in Debian builds
+  * Fixed missing return value in deviceuserargs data stream functions
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 26 Jun 2019 20:44:06 +0200
+
+sdrangel (4.10.1-1) unstable; urgency=medium
+
+  * Implemented device user arguments
+  * PVS-Studio static analysis corrections (5)
+  * FreeDV demod: use mainstream library from codec2 instead of internal
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 15 Jun 2019 06:44:06 +0200
+
+sdrangel (4.10.0-1) unstable; urgency=medium
+
+  * Support for KiwiSDR
+  * SSB demod: reworked AGC to handle the threshold gate properly
+  * FreeDV demod: support interpolation as well as decimation from channel sample rate
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 09 Jun 2019 16:44:06 +0200
+
+sdrangel (4.9.1-1) unstable; urgency=medium
+
+  * WFM demod: variable RF bandwidth. Implements #320
+  * Fixed buddies list handling at buddy termination time. Fixes #359
+  * Fixed Debian builds using AVX instructions. Fixes #360
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 06 Jun 2019 20:44:06 +0200
+
+sdrangel (4.9.0-1) unstable; urgency=medium
+
+  * New build system introduction
+  * NFM demod: fixed low-pass audio filter
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 01 Jun 2019 20:44:06 +0200
+
+sdrangel (4.8.2-1) unstable; urgency=medium
+
+  * SSB demod: fixes
+  * Audio input: set default volume factor to 1.0 (was 0.15)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 30 May 2019 20:44:06 +0100
+
+sdrangel (4.8.1-1) unstable; urgency=medium
+
+  * AM demod: fixed audio interpolator. Issue #354
+  * Interpolation to audio for NFM and SSB demods allowing the use of a 48k audio sink regardless of the channel sample rate
+  * AM demod: implemented low pass filter after the demod. Issue #352
+  * Spectrum window: added ability to use the mouse wheel to move the central channel marker line. Issue #343
+  * Frequency Tracker: make lock converge faster
+  * Added a splash screen on startup. Issue #343
+  * SoapySDR output: support floating point type samples. Issue #345
+  * NFM demod: made high pass audio filter optional to be able to pass DC to other programs via audio. Issue #343
+  * Added UHD rules in udev (and moved away to sdrangel-docker). Issue #343
+  * Use Qt precise timer for test and file sources
+  * "hidden" `--mimo` option to activate MIMO functionality (MIMO device set). Makes it optional until it can be officialy released
+  * Updated some base classes to adequately support new MIMO devices
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 20 May 2019 20:44:06 +0200
+
+sdrangel (4.8.0-1) unstable; urgency=medium
+
+  * Local output plugin
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 10 May 2019 20:44:06 +0200
+
+sdrangel (4.7.2-1) unstable; urgency=medium
+
+  * Unique DeviceAPI interface for sources and sinks
+  * REST API: fixes over last version
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 08 May 2019 22:14:18 +0200
+
+sdrangel (4.7.1-1) unstable; urgency=medium
+
+  * SSB modulator: fixed compressor overloading
+  * REST API: tx, nbStreams and streamIndex names change
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 07 May 2019 14:14:18 +0200
+
+sdrangel (4.7.0-1) unstable; urgency=medium
+
+  * New Frequency Tracker Rx channel plugin
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 05 May 2019 16:14:18 +0200
+
+sdrangel (4.6.0-1) unstable; urgency=medium
+
+  * New LocalSink and LocalInput plugin pair to use sub basebands internally
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 02 May 2019 11:14:18 +0200
+
+sdrangel (4.5.6-1) unstable; urgency=medium
+
+  * Remote channel sink: implemented decimation with possible center shift. Issue #331
+  * Remote input: fixed version display
+  * DSD demod: save PLL enable and autio mute in preset
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 28 Apr 2019 20:14:18 +0200
+
+sdrangel (4.5.5-1) unstable; urgency=medium
+
+  * FreeDV: fixes in REST API
+  * LimeSDR: fixed Rx and Tx antenna labels for Lime mini
+  * HackRF output: fixed setting of Fc pos from REST API
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 20 Apr 2019 20:14:18 +0200
+
+sdrangel (4.5.4-1) unstable; urgency=medium
+
+  * Fixed RTL-SDR gain setting sequence. Fixes issue #321.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 05 Apr 2019 20:14:18 +0200
+
+sdrangel (4.5.3-1) unstable; urgency=medium
+
+  * Fixed HackRF Rx/Tx frequency setting. Fixes issue #318.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 01 Apr 2019 20:14:18 +0200
+
+sdrangel (4.5.2-1) unstable; urgency=medium
+
+  * Send device and channel index in reverse API. Implements issue #312.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 25 Mar 2019 20:14:18 +0100
+
+sdrangel (4.5.1-1) unstable; urgency=medium
+
+  * DATV demod: implemented audio processing
+  * Perseus: fixed cold start flawed init sequence
+  * PlutoSDR: recognize networked devices
+  * FreeDV: internal FreeDV library to facilitate packaging
+  * Fixed some constness in qrtplib
+  * Fixed bug in Channel Analyzer deserialization. Fixes issue #314.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 22 Mar 2019 20:14:18 +0100
+
+sdrangel (4.5.0-1) unstable; urgency=medium
+
+  * Implemented a FreeDV modulator and demodulator
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 03 Mar 2019 20:14:18 +0100
+
+sdrangel (4.4.5-1) unstable; urgency=medium
+
+  * UDP/RTP audio: added G722 and Opus support
+  * Debian build: fixed missing sources in dsdcc, libiio and limesuite
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 19 Feb 2019 22:14:18 +0100
+
+sdrangel (4.4.4-1) unstable; urgency=medium
+
+  * SoapySDR: fixed some GUI issues
+  * UDP/RTP audio: added decimation and PCM A-law and Mu-law compression
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 15 Feb 2019 10:14:18 +0100
+
+sdrangel (4.4.3-1) unstable; urgency=medium
+
+  * Migration of SDRDaemon* devices to Remote* devices
+  * PlutoSDR: get LP filter bandwidth from device
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 03 Feb 2019 10:14:18 +0100
+
+sdrangel (4.4.2-1) unstable; urgency=medium
+
+  * Migration of Daemon* channels to Remote* channels
+  * XTRX: fixed GPS status retrieval
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 25 Jan 2019 21:14:18 +0100
+
+sdrangel (4.4.1-1) unstable; urgency=medium
+
+  * AirspyHF: Implemented new settings that come along newer version of libairspyhf
+  * Fixed many glitches in the REST API device settings handling
+  * SoapySDR: on preset load match on serial or driver id for SoapySDR devices
+  * SerialDV: corrected cmake find module and improved SerialDV support error messages
+  * Make the settings location appear in the log and in the about panel of the GUI also
+  * Temptative XTRX fixes
+  * REST API examples: Added a randomize channel colors utility as a way to answer to issue #275
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 02 Jan 2019 21:14:18 +0100
+
+sdrangel (4.4.0-1) unstable; urgency=medium
+
+  * XTRX support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 02 Jan 2019 21:14:18 +0100
+
+sdrangel (4.3.2-1) unstable; urgency=medium
+
+  * Reverse API to forward device and channel changes to external application
+  * Funcube dongle: fixed segfault when stopping device
+  * Channel analzyer: fixed rational downsampler range
+  * SoapySDR support: fixed memory leaks
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 09 Dec 2018 21:14:18 +0100
+
+sdrangel (4.3.1-1) unstable; urgency=medium
+
+  * RTL-SDR: offset tuning support
+  * SoapySDR support: 250 ms minimum timeout
+  * LimeSDR REST API: support GPIO
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 30 Nov 2018 21:14:18 +0100
+
+sdrangel (4.3.0-1) unstable; urgency=medium
+
+  * SoapySDR support
+  * BladeRF2 corrections
+  * Scope fixes possible seg fault and correct memory processing
+  * FCDPro/FCDProPlus critical fixes to make it work again
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 22 Nov 2018 21:14:18 +0100
+
+sdrangel (4.2.4-1) unstable; urgency=medium
+
+  * LimeSDR: use LimeSuite 18.10.0 for builds
+  * DSD demod: use 1 dB steps for squelch
+  * Scope: fixed some trigger issues. Fixes issue #233
+  * Scope: implemented trigger holdoff. May fix more trigger issues.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 27 Oct 2018 21:14:18 +0200
+
+sdrangel (4.2.3-1) unstable; urgency=medium
+
+  * Scope: fixed channel rate affecting scope in memory mode. Issue #227
+  * Spectrum: limit depth to 1000 when in moving average mode to avoid RAM exhaustion
+  * Spectrum: reworked phosphor display controls. Re-implements issue #207
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 19 Oct 2018 21:14:18 +0200
+
+sdrangel (4.2.2-1) unstable; urgency=medium
+
+  * Spectrum: option to get max over a number of FFTs. Implements issue #207
+  * File Input: fixed wrong times displays due to 32 bit integer ovevlow. Issue #206
+  * File Input: implemented play loop and playback acceleration
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 14 Oct 2018 21:14:18 +0200
+
+sdrangel (4.2.1-1) unstable; urgency=medium
+
+  * FileRecord improvement with robust header and some fixes. Fixes issue #206
+  * BladeRF2 MO Tx fix so that the two channels are used effectively. Fixes issue #225
+  * NFM demod: set squelch step to 1 dB
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 10 Oct 2018 21:14:18 +0200
+
+sdrangel (4.2.0-1) unstable; urgency=medium
+
+  * LibbladeRF 2.0 support with BladeRF Micro
+  * Scope: corrected trace memory index position
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 7 Oct 2018 21:14:18 +0200
+
+sdrangel (4.1.0-1) unstable; urgency=medium
+
+  * Integrated SDRdaemon with a pair of new channel plugins
+  * Exchanged UDP sink and source names for better consistency
+  * Fixed AudioFifo to prevent deadlocks. Fixes issue #210
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 16 Sep 2018 21:14:18 +0200
+
+sdrangel (4.0.7-1) unstable; urgency=medium
+
+  * Scope: removed old scope objects
+  * Web API: reduced HTTP server debug messages
+  * Sink plugins: corrected name getters and setters
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 19 Aug 2018 21:14:18 +0200
+
+sdrangel (4.0.6-1) unstable; urgency=medium
+
+  * Web API: RTL-SDR: fixed RF bandwidth setting
+  * Web API: enhanced DV serial and AM demod interfaces
+  * Web API: fixed bug in PUT/PATCH of modulators not setting differentially
+  * Fixed power display going to floor value in some demods
+  * SSB modulator: fixed sample not reset when no modulation is present
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 07 Aug 2018 19:14:18 +0200
+
+sdrangel (4.0.5-1) unstable; urgency=medium
+
+  * Web API: handle pre-flight requests
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 22 Jul 2018 09:14:18 +0200
+
+sdrangel (4.0.4-1) unstable; urgency=medium
+
+  * Fixed PlutoSDR output sample width. Fixes issue #198
+  * Web API: implemented CORS
+  * Fix preset group delete not removing presets from the preset window
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 18 Jul 2018 19:14:18 +0200
+
+sdrangel (4.0.3-1) unstable; urgency=medium
+
+  * Spectrum: linear mode for spectrum
+  * Scope: fixed power display overlay
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 08 Jul 2018 15:14:18 +0200
+
+sdrangel (4.0.2-1) unstable; urgency=medium
+
+  * Spectrum: added averaging
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 01 Jul 2018 21:14:18 +0200
+
+sdrangel (4.0.1-1) unstable; urgency=medium
+
+  * DSD demod: added NXDN support
+  * DATV demod: include it only if FFmpeg > 3.1 is installed
+  * Fixes for Arch. Manual merge of pull request #183
+  * Scope: new magnitude squared projection mainly for radioastronomy
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 23 Jun 2018 09:14:18 +0200
+
+sdrangel (4.0.0-1) unstable; urgency=medium
+
+  * Finalization of REST API and server instance
+  * Removal of old ChannelAnalyzer and TCPSrc plugins
+  * Renamed Channel Analyzer NG to Channel Analyzer
+  * DATV demod: added missing AVUTIL cmake variables
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 09 Jun 2018 20:14:18 +0200
+
+sdrangel (3.14.7-1) unstable; urgency=medium
+
+  * ChanelAnalyzerNG: added PLL option and source selection with auto correlation
+  * RTL-SDR: fixed inf/sup decimators
+  * AM demod: syncrhronous AM detection option
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 20 May 2018 20:14:18 +0200
+
+sdrangel (3.14.6-1) unstable; urgency=medium
+
+  * Fixed keyboard input for negative values on realtive integer value dials
+  * Get rid of ugly native dialogs
+  * Inf/Sup frequency shift scheme change to be closer to device center frequency
+  * PlutoSDR input: fixed Inf/Sup frequency shift calculation
+  * File record default file name with ISO datetime stamp
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 11 May 2018 20:14:18 +0200
+
+sdrangel (3.14.5-1) unstable; urgency=medium
+
+  * DSD demod: allow audio rates integer multiples of 8k other than 48k
+  * Added a benchmark program testing decimators
+  * Optimization of decimators using even/odd technique
+  * SSB mod: fixed channel unregistration
+  * AM demod: fixed delayed squelch
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 06 May 2018 20:14:18 +0200
+
+sdrangel (3.14.4-1) unstable; urgency=medium
+
+  * AM demod: squelch buffer to open at start of valid squelch
+  * NFM demod: same as AM with squelch noise tail cut
+  * SSB demod: squelch buffer to cut squelch noise tail
+  * DSD demod: squelch buffer to open at start of valid squelch not loosing any samples
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 22 Apr 2018 17:14:18 +0200
+
+sdrangel (3.14.3-1) unstable; urgency=medium
+
+  * LimeSDR: compiled with LimeSuite release 18.04.1
+  * LimeSDR: implemented transverter dialog (issue #157)
+  * UDP source and sink: make sure audio samples are always on 16 bits
+  * UDP source and sink: dialog elements for address and port
+  * Reviewed FFT destruction in many channel sources and sinks (issue #159)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 20 Apr 2018 20:14:18 +0200
+
+sdrangel (3.14.2-1) unstable; urgency=medium
+
+  * Web API: settings and report for all channel Tx plugins
+  * Server: AirspyHF, BladeRF and all channel Tx plugins support
+  * PVS-Studio static analysis corrections (4)
+  * NFM demod: fixed AF squelch and audio sample rate handling
+  * BFM demod: fixed segfault in RDS parser
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 15 Apr 2018 12:14:18 +0200
+
+sdrangel (3.14.1-1) unstable; urgency=medium
+
+  * NFM: fixed lowpass filter initialization (CTCSS)
+  * DSD demod: set FM deviation independent from RF bandwidth
+  * DSD demod: implemented DMR negative with DSDcc v1.7.5
+  * DSD demod: implemented dialog to view the log of status text messages
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 01 Apr 2018 12:14:18 +0200
+
+sdrangel (3.14.0-1) unstable; urgency=medium
+
+  * New audio devices management
+  * DATV demod: fixed message handling and thus screen initialization issue
+  * Removed UDP/RTP copy audio from channel sink plugins entirely
+  * Removed UDP address and port from Channel marker
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 30 Mar 2018 16:14:18 +0200
+
+sdrangel (3.13.1-1) unstable; urgency=medium
+
+  * Web API: settings and report enry points for AM demod and AirspyHF
+  * Web API: client Python script scanner example
+  * LimeSDR: fixed channelA/B frequency setting with latest LimeSuite
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 25 Mar 2018 06:14:18 +0100
+
+sdrangel (3.13.0-1) unstable; urgency=medium
+
+  * DATV (Digital Amateur TV) demodulator.
+  * Option to use RTP protocol for UDP audio for AM, NFM, SSB, WFM.
+  * LimeSDR: show NCO and center frequency actual values
+  * DSD demod: new simplified symbol scope display. Reworked GUI.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 11 Mar 2018 06:14:18 +0100
+
+sdrangel (3.12.0-1) unstable; urgency=medium
+
+  * Perseus support.
+  * 24 bit Rx DSP Debian builds
+  * DC and IQ correction fixes
+  * AirspyHF: fall back to official library support
+  * Test source: implemented phase imbalance
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 11 Feb 2018 12:14:18 +0100
+
+sdrangel (3.11.1-1) unstable; urgency=medium
+
+  * Replaced hardcoded bit scaling literals by defines. 24 bit sample option.
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 28 Jan 2018 12:14:18 +0100
+
+sdrangel (3.11.0-1) unstable; urgency=medium
+
+  * AirspyHF: support
+  * Refactored 8 bit samples shifting during decimation (RTL-SDR and HackRF Rx)
+  * RTL-SDR: implemented RF filter control (tuner bandwidth)
+  * Airspy, BladeRF, HackRF, PlutoSDR, RTLSDR, SDRPlay: fix for no decimation
+  * Test source input plugin for test of software internals
+  * GUI: show REST API URL in about dialog
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 20 Jan 2018 12:14:18 +0100
+
+sdrangel (3.10.1-1) unstable; urgency=medium
+
+  * LimeSDR: fixed segfault when stopping one device in multiple stream confguration
+  * PlutoSDR: fixed segfault when stopping one device in multiple stream confguration
+  * Channel plugins: apply initial channel settings at construction and start
+  * SSB demod: refactored decimator filtering
+  * FileSource: fixed initialization of do apply settings flag possibly preventing start
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 07 Jan 2018 23:14:18 +0100
+
+sdrangel (3.10.0-1) unstable; urgency=medium
+
+  * Implemented external command handling from the GUI
+  * AM, SSB demodulators and SSB modulator: fix sample rate handling
+  * Enhancements to presets processing and GUI
+  * Improved build and system info logging
+  * Web API: added function to set device set focus (GUI only)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 07 Jan 2018 09:14:18 +0100
+
+sdrangel (3.9.1-1) unstable; urgency=medium
+
+  * Transmission: make source channels working concurrently in multiple channel
+  * Transmission: connect source channel directly to device FIFO in single channel
+  * NFM, WFM modulators and UDP sink: fixes
+  * DSD demodulator: use lower cutoff for optional audio high pass filter
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 02 Jan 2018 18:14:18 +0100
+
+sdrangel (3.9.0-1) unstable; urgency=medium
+
+  * Server: proof of concept
+  * DSD demodulator: added optional high pass filter on audio (uese dsdcc v1.7.3)
+  * Down/Up channelizers: enqeue MsgChannelizerNotification to sample sink/source
+  * Separate channel sample rate and offset frequency this data from settings
+  * Use specific method to apply channelizer sample rate and frequency offset changes
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 30 Dec 2017 17:14:18 +0100
+
+sdrangel (3.8.6-1) unstable; urgency=medium
+
+  * LimeSDR: fixed second channel solo or first one streaming
+  * Web API: implemented some device plugins methods: RTLSDR, Lime
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 10 Dec 2017 12:14:18 +0100
+
+sdrangel (3.8.5-1) unstable; urgency=medium
+
+  * SSB mod/demod: improve LSB/USB experience
+  * Web API: online static documentation page
+  * Web API: implemented all main window methods
+  * LimeSDR: fixed analog LP filter setting
+  * LimeSDR: builds done with LimeSuite commit 0167e64 to suport LimeSDR mini
+  * Debian: added installation of udev rules in postinst script
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 02 Dec 2017 12:14:18 +0100
+
+sdrangel (3.8.4-1) unstable; urgency=medium
+
+  * Optimize channel marker signal handling. Applied to all mods and demods
+  * Fixed value dials direct digits setting
+  * Implemented minimal version of web API sever
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 18 Nov 2017 12:14:18 +0100
+
+sdrangel (3.8.3-1) unstable; urgency=medium
+
+  * ChannelAnalyzerNG: fixed GUI displays when channel sample rate changes
+  * SSB demod: fixed low cutoff channel marker display
+  * LimeSDR: increased start/stop stream wait time to 50ms
+  * New logging system with optional copy to files
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 12 Nov 2017 18:14:18 +0100
+
+sdrangel (3.8.2-1) unstable; urgency=medium
+
+  * WFM Demod: fixed segfault due to sequence of actions in demod constructor
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 08 Nov 2017 18:14:18 +0100
+
+sdrangel (3.8.1-1) unstable; urgency=medium
+
+  * SSB Mod: refactored bandwidths settings and fixed segfault
+  * LimeSDR: implemented external clock reference input option
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 05 Nov 2017 18:14:18 +0100
+
+sdrangel (3.8.0-1) unstable; urgency=medium
+
+  * Redesigned the device handling to accomodate multi channel devices like LimeSDR
+  * Refactoring: Separate DeviceAPI from the GUI
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 02 Nov 2017 18:14:18 +0100
+
+sdrangel (3.7.8-1) unstable; urgency=medium
+
+  * PlutoSDR: restored and fixed Tx support
+  * LimeSDR: reworked the start/stop stream so it does not need the workaround delay
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 28 Oct 2017 18:14:18 +0100
+
+sdrangel (3.7.7-1) unstable; urgency=medium
+
+  * PlutoSDR: removed Tx support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 27 Oct 2017 23:14:18 +0200
+
+sdrangel (3.7.6-1) unstable; urgency=medium
+
+  * LimeSDR: attempt to fix lockup conditions when Rx and Tx run concurrently
+  * LimeSDR: handle hardware decimation and sample rate Rx/Tx relation correctly
+  * Create sdrbase library own CMakeLists.txt
+  * Created sdrgui library and split off GUI stuff from sdrbase
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 21 Oct 2017 23:14:18 +0200
+
+sdrangel (3.7.5-1) unstable; urgency=medium
+
+  * CW keyer: make ramp as 20% of dot length to smoothen even more
+  * Fixed BFM demod frequency shift
+  * GUI and demod separation step 1 full
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 14 Oct 2017 23:14:18 +0200
+
+sdrangel (3.7.4-1) unstable; urgency=medium
+
+  * GUI and demod separation step 1 full
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 08 Oct 2017 23:14:18 +0200
+
+sdrangel (3.7.3-1) unstable; urgency=medium
+
+  * For Airspy, Funcube Pro and Pro+, PlutoSDR Rx and Tx, RTLSDR:
+  * Button and dialog to set frequency translation for transverter operation
+  * GUI and demod separation step 1 partial
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 04 Oct 2017 23:14:18 +0200
+
+sdrangel (3.7.2-1) unstable; urgency=medium
+
+  * PlutoSDR: Remove from device enumeration if device is not accessible
+  * RTLSDR: Fixed gains retrieval in the GUI
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 23 Sep 2017 05:14:18 +0200
+
+sdrangel (3.7.1-1) unstable; urgency=medium
+
+  * PlutoSDR: Tx support
+  * LimeSDR: use version 17.09 of LimeSuite providing bug fixes
+  * GUI segregation: remove device source or sink lifecycle from the GUI
+  * GUI segregation: handle GUI and device buddy updates separately
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 21 Sep 2017 21:14:18 +0200
+
+sdrangel (3.7.0-1) unstable; urgency=medium
+
+  * PlutoSDR: Rx support
+  * GUI segregation: preliminary works
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 17 Sep 2017 23:14:18 +0200
+
+sdrangel (3.6.1-1) unstable; urgency=medium
+
+  * Basic channel settings dialog with title+color update and UDP parameters
+  * Applied to UDPSink, UDPSource, DSDDemod, AMDemod, BFMDemod, NFMDemod
+  * DSD, AM, NFM, BFM demods: added possibility to send AF via UDP
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 31 Aug 2017 23:14:18 +0200
+
+sdrangel (3.6.0-1) unstable; urgency=medium
+
+  * UDPSink Tx plugin: new
+  * LimeSDR output: fixed Tx not stopping on stop (issue #50)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 17 Aug 2017 23:14:18 +0200
+
+sdrangel (3.5.5-1) unstable; urgency=medium
+
+  * Output plugins: use fixed time length for sample FIFO of ~0.25s
+  * Audio modulators: reduce audio input file buffer to 0.1s
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 13 Aug 2017 23:14:18 +0200
+
+sdrangel (3.5.4-1) unstable; urgency=medium
+
+  * LimeSDR: fixed NCO lower boundary calculation by flooring to zero
+  * LimeSDR: corrected NCO de-tune when sample rate or hardware decim/interp changes
+  * All audio modulators: fixed audio input
+  * SSB modulator: added an audio compressor
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 06 Aug 2017 23:14:18 +0200
+
+sdrangel (3.5.3-1) unstable; urgency=medium
+
+  * SSB demod: anded optional AGC
+  * ChannelAnalyzerNG: better handling of LSB in the UI
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 31 Jul 2017 09:14:18 +0200
+
+sdrangel (3.5.2-1) unstable; urgency=medium
+
+  * HackRF: stop Rx before start Tx automatically and vice versa
+  * HackRF: added option on Rx to drive Tx frequency change
+  * SSB mod and demod: make UI displays consistent with DSB, USB and LSB modes
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 22 Jul 2017 09:14:18 +0200
+
+sdrangel (3.5.1-1) unstable; urgency=medium
+
+  * LimeSDR input: added individual gains control and ADC rate display
+  * LimeSDR output: added DAC rate display
+  * LimeSDR all: added board temperature display
+  * Added pulseaudio and libqt5multimedia5-plugins in the Debian dependencies
+  * Updates to build on aarch64 in openSUSE
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 01 Jul 2017 19:14:18 +0200
+
+sdrangel (3.5.0-1) unstable; urgency=medium
+
+  * SDRdaemonSink plugin connecting to a distant sdrdaemontx instance
+  * SDRdemonFEC plugin renamed to SDRdaemonSource
+  * SDRdaemon plugin deprecated and removed from the build and distributions
+  * Changed frequency thumbweels color scheme
+  * Activated compiler warnings and fixed warnings
+  * Lots of little GUI fixes
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 11 Jun 2017 19:14:18 +0200
+
+sdrangel (3.4.5-1) unstable; urgency=medium
+
+  * Removed default constuctors in Moving average and AGC classes
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 11 May 2017 21:14:18 +0100
+
+sdrangel (3.4.4-1) unstable; urgency=medium
+
+  * LimeSDR output: fixed timeout value on LMS_SendStream
+  * LimeSDR: various fixes to make it run smoothly
+  * LimeSDR: Windows 64 build
+  * LimeSDR: integrated Debian build
+  * cmake modules: search lib64 libraries
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 08 May 2017 21:14:18 +0100
+
+sdrangel (3.4.3-1) unstable; urgency=medium
+
+  * DSD demod: use version 1.7.1 of dsdcc with PLL for symbol synchronization as an option
+  * LimeSDR: fixed antenna selection in both input and output plugins
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 08 May 2017 23:14:18 +0100
+
+sdrangel (3.4.2-1) unstable; urgency=medium
+
+  * DSD demod: use version 1.7.0 of dsdcc with PLL for symbol synchronization
+  * DSD demod: kernel >= 4.4.52 workaround for SerialDV
+  * Code cleanup: cppchack and Eclipse warnings
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 26 Apr 2017 23:14:18 +0100
+
+sdrangel (3.4.1-1) unstable; urgency=medium
+
+  * Optimization of halfband interpolation FIR fitler processing
+  * HackRF support: fixed start/stop sequence
+  * WFM Demod enhancement
+  * CW Keyer: specifiy char signedness to fix error with some compilers
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 26 Apr 2017 23:14:18 +0100
+
+sdrangel (3.4.0-1) unstable; urgency=medium
+
+  * LimeSDR support with redesign of source and sink management
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 17 Apr 2017 23:14:18 +0100
+
+sdrangel (3.3.4-1) unstable; urgency=medium
+
+  * ATV Demod: fixed issue #22. Segfault when starting the plugin while the
+  * source is running
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Mon, 10 Apr 2017 21:14:18 +0100
+
+sdrangel (3.3.3-1) unstable; urgency=medium
+
+  * HackRF, BladeRF, RTLSDR plugins: continuous sample rate setting
+  * ATV: implemented narrow band modes
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 9 Apr 2017 23:14:18 +0100
+
+sdrangel (3.3.2-1) unstable; urgency=medium
+
+  * ATV plugins: added 405 lines, 20 and 16 FPS  modes
+  * ATV demodulator: added a scope panel in a tab combo with the TV screen
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 22 Mar 2017 23:14:18 +0100
+
+sdrangel (3.3.1-1) unstable; urgency=medium
+
+  * ATV plugins: SSB and vestigiial sideband support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 19 Mar 2017 23:14:18 +0100
+
+sdrangel (3.3.0-1) unstable; urgency=medium
+
+  * NFM demod: new discriminator and optional FM deviation based squelch
+  * ATV modulator
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 15 Mar 2017 23:14:18 +0100
+
+sdrangel (3.2.0-1) unstable; urgency=medium
+
+  * ATV demodulator for amateur Analog TV
+  * New channel analyzer Channel Analyzer NG with a new generation signal scope
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 02 Mar 2017 23:14:18 +0100
+
+sdrangel (3.1.1-1) unstable; urgency=medium
+
+  * DSD demod: adapt to dsdcc version 1.6
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Fri, 13 Jan 2017 03:14:18 +0100
+
+sdrangel (3.1.0-1) unstable; urgency=medium
+
+  * HackRF Tx support
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 08 Jan 2017 23:14:18 +0100
+
+sdrangel (3.0.1-1) unstable; urgency=medium
+
+  * Fixed audio preferences dialog and handling
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sat, 07 Jan 2017 11:14:18 +0100
+
+sdrangel (3.0.0-1) unstable; urgency=medium
+
+  * Implemented real Tx devices (BladeRF and HackRF) for real transmission
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 01 Jan 2017 23:14:18 +0100
+
+sdrangel (2.5.2-1) unstable; urgency=medium
+
+  * Changed modulators source device feeding
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 25 Dec 2016 23:14:18 +0100
+
+sdrangel (2.5.1-1) unstable; urgency=medium
+
+  * WFM Modulator
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 18 Dec 2016 23:14:18 +0100
+
+sdrangel (2.5.0-1) unstable; urgency=medium
+
+  * SSB Modulator
+  * CW Keyer
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Thu, 15 Dec 2016 23:14:18 +0100
+
+sdrangel (2.4.0-1) unstable; urgency=medium
+
+  * NFM Modulator
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 05 Dec 2016 23:14:18 +0100
+
+sdrangel (2.3.1-1) unstable; urgency=medium
+
+  * AM Modulator: support file input
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 27 Nov 2016 23:14:18 +0100
+
+sdrangel (2.3.0-1) unstable; urgency=medium
+
+  * SDRplay support: new input source plugin
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Sun, 13 Nov 2016 23:14:18 +0100
+
+sdrangel (2.2.2-1) unstable; urgency=medium
+
+  * Baseband Halfband FIR filter optimizations
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 11 Nov 2016 12:25:34 +0100
+
+sdrangel (2.2.1-1) unstable; urgency=medium
+
+  * Baseband Tx support (phase 2)
+  * Code optimizations
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Wed, 02 Nov 2016 14:15:15 +0100
+
+sdrangel (2.2.0-1) unstable; urgency=medium
+
+  * Initial release as a Debian package
+  * Embryonic Tx support (phase 1)
+
+ -- Edouard Griffiths, F4EXB <f4exb06@gmail.com>  Tue, 24 Oct 2016 23:15:15 +0200

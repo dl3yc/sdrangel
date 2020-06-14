@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,7 +17,9 @@
 ///////////////////////////////////////////////////////////////////////////////////
 
 #include <QDebug>
-#include <dsp/devicesamplesource.h>
+
+#include "dsp/devicesamplestatic.h"
+#include "dsp/devicesamplesource.h"
 
 DeviceSampleSource::DeviceSampleSource() :
     m_guiMessageQueue(0)
@@ -47,25 +50,38 @@ qint64 DeviceSampleSource::calculateDeviceCenterFrequency(
             int log2Decim,
             fcPos_t fcPos,
             quint32 devSampleRate,
+            FrequencyShiftScheme frequencyShiftScheme,
             bool transverterMode)
 {
-    qint64 deviceCenterFrequency = centerFrequency;
-    deviceCenterFrequency -= transverterMode ? transverterDeltaFrequency : 0;
-    deviceCenterFrequency = deviceCenterFrequency < 0 ? 0 : deviceCenterFrequency;
-    qint64 f_img = deviceCenterFrequency;
+    return DeviceSampleStatic::calculateSourceDeviceCenterFrequency(
+        centerFrequency,
+        transverterDeltaFrequency,
+        log2Decim,
+        (DeviceSampleStatic::fcPos_t) fcPos,
+        devSampleRate,
+        (DeviceSampleStatic::FrequencyShiftScheme) frequencyShiftScheme,
+        transverterMode
+    );
+}
 
-    deviceCenterFrequency -= calculateFrequencyShift(log2Decim, fcPos, devSampleRate);
-    f_img -= 2*calculateFrequencyShift(log2Decim, fcPos, devSampleRate);
-
-    qDebug() << "DeviceSampleSource::calculateDeviceCenterFrequency:"
-            << " desired center freq: " << centerFrequency << " Hz"
-            << " device center freq: " << deviceCenterFrequency << " Hz"
-            << " device sample rate: " << devSampleRate << "S/s"
-            << " Actual sample rate: " << devSampleRate/(1<<log2Decim) << "S/s"
-            << " center freq position code: " << fcPos
-            << " image frequency: " << f_img << "Hz";
-
-    return deviceCenterFrequency;
+qint64 DeviceSampleSource::calculateCenterFrequency(
+            quint64 deviceCenterFrequency,
+            qint64 transverterDeltaFrequency,
+            int log2Decim,
+            fcPos_t fcPos,
+            quint32 devSampleRate,
+            FrequencyShiftScheme frequencyShiftScheme,
+            bool transverterMode)
+{
+    return DeviceSampleStatic::calculateSourceCenterFrequency(
+        deviceCenterFrequency,
+        transverterDeltaFrequency,
+        log2Decim,
+        (DeviceSampleStatic::fcPos_t) fcPos,
+        devSampleRate,
+        (DeviceSampleStatic::FrequencyShiftScheme) frequencyShiftScheme,
+        transverterMode
+    );
 }
 
 /**
@@ -86,25 +102,13 @@ qint64 DeviceSampleSource::calculateDeviceCenterFrequency(
 qint32 DeviceSampleSource::calculateFrequencyShift(
             int log2Decim,
             fcPos_t fcPos,
-            quint32 devSampleRate)
+            quint32 devSampleRate,
+            FrequencyShiftScheme frequencyShiftScheme)
 {
-    if (log2Decim == 0) { // no shift at all
-        return 0;
-    } else if (log2Decim < 3) {
-        if (fcPos == FC_POS_INFRA) { // shift in the square next to center frequency
-            return -(devSampleRate / (1<<(log2Decim+1)));
-        } else if (fcPos == FC_POS_SUPRA) {
-            return devSampleRate / (1<<(log2Decim+1));
-        } else {
-            return 0;
-        }
-    } else {
-        if (fcPos == FC_POS_INFRA) { // shift centered in the square next to center frequency
-            return -(devSampleRate / (1<<(log2Decim)));
-        } else if (fcPos == FC_POS_SUPRA) {
-            return devSampleRate / (1<<(log2Decim));
-        } else {
-            return 0;
-        }
-    }
+    return DeviceSampleStatic::calculateSourceFrequencyShift(
+        log2Decim,
+        (DeviceSampleStatic::fcPos_t) fcPos,
+        devSampleRate,
+        (DeviceSampleStatic::FrequencyShiftScheme) frequencyShiftScheme
+    );
 }

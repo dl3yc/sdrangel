@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,13 +31,13 @@
 class SampleSinkFifo;
 class MessageQueue;
 class QTimer;
-class DeviceSourceAPI;
+class DeviceAPI;
 
 class RemoteInputUDPHandler : public QObject
 {
 	Q_OBJECT
 public:
-	RemoteInputUDPHandler(SampleSinkFifo* sampleFifo, DeviceSourceAPI *deviceAPI);
+	RemoteInputUDPHandler(SampleSinkFifo* sampleFifo, DeviceAPI *deviceAPI);
 	~RemoteInputUDPHandler();
 	void setMessageQueueToGUI(MessageQueue *queue) { m_outputMessageQueueToGUI = queue; }
 	void start();
@@ -46,7 +47,7 @@ public:
     int getNbOriginalBlocks() const { return RemoteNbOrginalBlocks; }
     bool isStreaming() const { return m_masterTimerConnected; }
     int getSampleRate() const { return m_samplerate; }
-    int getCenterFrequency() const { return m_centerFrequency * 1000; }
+    int getCenterFrequency() const { return m_centerFrequency; }
     int getBufferGauge() const { return m_remoteInputBuffer.getBufferGauge(); }
     uint64_t getTVmSec() const { return m_tv_msec; }
     int getMinNbBlocks() { return m_remoteInputBuffer.getMinNbBlocks(); }
@@ -55,7 +56,7 @@ public slots:
 	void dataReadyRead();
 
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	const QTimer& m_masterTimer;
 	bool m_masterTimerConnected;
 	bool m_running;
@@ -70,7 +71,7 @@ private:
 	qint64 m_udpReadBytes;
 	SampleSinkFifo *m_sampleFifo;
 	uint32_t m_samplerate;
-	uint32_t m_centerFrequency;
+	uint64_t m_centerFrequency;
 	uint64_t m_tv_msec;
 	MessageQueue *m_outputMessageQueueToGUI;
 	uint32_t m_tickCount;
@@ -79,7 +80,7 @@ private:
 
 	QElapsedTimer m_elapsedTimer;
 	int m_throttlems;
-    uint32_t m_readLengthSamples;
+    int32_t m_readLengthSamples;
     uint32_t m_readLength;
     int32_t *m_converterBuffer;
     uint32_t m_converterBufferNbSamples;

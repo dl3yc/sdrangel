@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,31 +21,20 @@
 #include <vector>
 
 #include <QNetworkRequest>
-#include <QMutex>
 
 #include "dsp/basebandsamplesink.h"
-#include "channel/channelsinkapi.h"
-#include "dsp/nco.h"
-#include "dsp/interpolator.h"
-#include "util/movingaverage.h"
-#include "dsp/agc.h"
-#include "dsp/bandpass.h"
-#include "dsp/lowpass.h"
-#include "dsp/phaselockcomplex.h"
-#include "audio/audiofifo.h"
+#include "channel/channelapi.h"
 #include "util/message.h"
-#include "util/doublebufferfifo.h"
 
+#include "amdemodbaseband.h"
 #include "amdemodsettings.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
-class DownChannelizer;
-class ThreadedBasebandSampleSink;
-class fftfilt;
+class QThread;
+class DeviceAPI;
 
-class AMDemod : public BasebandSampleSink, public ChannelSinkAPI {
+class AMDemod : public BasebandSampleSink, public ChannelAPI {
 	Q_OBJECT
 public:
     class MsgConfigureAMDemod : public Message {
@@ -70,30 +60,7 @@ public:
         { }
     };
 
-    class MsgConfigureChannelizer : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        int getSampleRate() const { return m_sampleRate; }
-        int getCenterFrequency() const { return m_centerFrequency; }
-
-        static MsgConfigureChannelizer* create(int sampleRate, int centerFrequency)
-        {
-            return new MsgConfigureChannelizer(sampleRate, centerFrequency);
-        }
-
-    private:
-        int m_sampleRate;
-        int  m_centerFrequency;
-
-        MsgConfigureChannelizer(int sampleRate, int centerFrequency) :
-            Message(),
-            m_sampleRate(sampleRate),
-            m_centerFrequency(centerFrequency)
-        { }
-    };
-
-    AMDemod(DeviceSourceAPI *deviceAPI);
+    AMDemod(DeviceAPI *deviceAPI);
 	~AMDemod();
 	virtual void destroy() { delete this; }
 
@@ -109,6 +76,16 @@ public:
     virtual QByteArray serialize() const;
     virtual bool deserialize(const QByteArray& data);
 
+    virtual int getNbSinkStreams() const { return 1; }
+    virtual int getNbSourceStreams() const { return 0; }
+
+    virtual qint64 getStreamCenterFrequency(int streamIndex, bool sinkElseSource) const
+    {
+        (void) streamIndex;
+        (void) sinkElseSource;
+        return m_settings.m_inputFrequencyOffset;
+    }
+
     virtual int webapiSettingsGet(
             SWGSDRangel::SWGChannelSettings& response,
             QString& errorMessage);
@@ -123,104 +100,45 @@ public:
             SWGSDRangel::SWGChannelReport& response,
             QString& errorMessage);
 
-    uint32_t getAudioSampleRate() const { return m_audioSampleRate; }
-	double getMagSq() const { return m_magsq; }
-	bool getSquelchOpen() const { return m_squelchOpen; }
-	bool getPllLocked() const { return m_settings.m_pll && m_pll.locked(); }
-	Real getPllFrequency() const { return m_pll.getFreq(); }
+    static void webapiFormatChannelSettings(
+            SWGSDRangel::SWGChannelSettings& response,
+            const AMDemodSettings& settings);
 
-    void getMagSqLevels(double& avg, double& peak, int& nbSamples)
-    {
-        if (m_magsqCount > 0)
-        {
-            m_magsq = m_magsqSum / m_magsqCount;
-            m_magSqLevelStore.m_magsq = m_magsq;
-            m_magSqLevelStore.m_magsqPeak = m_magsqPeak;
-        }
+    static void webapiUpdateChannelSettings(
+            AMDemodSettings& settings,
+            const QStringList& channelSettingsKeys,
+            SWGSDRangel::SWGChannelSettings& response);
 
-        avg = m_magSqLevelStore.m_magsq;
-        peak = m_magSqLevelStore.m_magsqPeak;
-        nbSamples = m_magsqCount == 0 ? 1 : m_magsqCount;
+    uint32_t getAudioSampleRate() const { return m_basebandSink->getAudioSampleRate(); }
+	double getMagSq() const { return m_basebandSink->getMagSq(); }
+	bool getSquelchOpen() const { return m_basebandSink->getSquelchOpen(); }
+	bool getPllLocked() const { return m_settings.m_pll && m_basebandSink->getPllLocked(); }
+	Real getPllFrequency() const { return m_basebandSink->getPllFrequency(); }
 
-        m_magsqSum = 0.0f;
-        m_magsqPeak = 0.0f;
-        m_magsqCount = 0;
+    void getMagSqLevels(double& avg, double& peak, int& nbSamples) {
+        m_basebandSink->getMagSqLevels(avg, peak, nbSamples);
     }
+
+    uint32_t getNumberOfDeviceStreams() const;
 
     static const QString m_channelIdURI;
     static const QString m_channelId;
 
 private:
-    struct MagSqLevelsStore
-    {
-        MagSqLevelsStore() :
-            m_magsq(1e-12),
-            m_magsqPeak(1e-12)
-        {}
-        double m_magsq;
-        double m_magsqPeak;
-    };
-
-	enum RateState {
-		RSInitialFill,
-		RSRunning
-	};
-
-	DeviceSourceAPI *m_deviceAPI;
-    ThreadedBasebandSampleSink* m_threadedChannelizer;
-    DownChannelizer* m_channelizer;
-
-    int m_inputSampleRate;
-    int m_inputFrequencyOffset;
+	DeviceAPI *m_deviceAPI;
+    QThread *m_thread;
+    AMDemodBaseband* m_basebandSink;
     AMDemodSettings m_settings;
-    uint32_t m_audioSampleRate;
-    bool m_running;
-
-	NCO m_nco;
-	Interpolator m_interpolator;
-	Real m_interpolatorDistance;
-	Real m_interpolatorDistanceRemain;
-
-	Real m_squelchLevel;
-	uint32_t m_squelchCount;
-	bool m_squelchOpen;
-	DoubleBufferFIFO<Real> m_squelchDelayLine;
-	double m_magsq;
-	double m_magsqSum;
-	double m_magsqPeak;
-	int  m_magsqCount;
-	MagSqLevelsStore m_magSqLevelStore;
-
-	MovingAverageUtil<Real, double, 16> m_movingAverage;
-	SimpleAGC<4800> m_volumeAGC;
-    Bandpass<Real> m_bandpass;
-    Lowpass<std::complex<float> > m_pllFilt;
-    PhaseLockComplex m_pll;
-    fftfilt* DSBFilter;
-    fftfilt* SSBFilter;
-    Real m_syncAMBuff[2*1024];
-    uint32_t m_syncAMBuffIndex;
-    MagAGC m_syncAMAGC;
-
-	AudioVector m_audioBuffer;
-	uint32_t m_audioBufferFill;
-	AudioFifo m_audioFifo;
+    int m_basebandSampleRate; //!< stored from device message used when starting baseband sink
 
     static const int m_udpBlockSize;
 
     QNetworkAccessManager *m_networkManager;
     QNetworkRequest m_networkRequest;
 
-	QMutex m_settingsMutex;
-
-	void applyChannelSettings(int inputSampleRate, int inputFrequencyOffset, bool force = false);
     void applySettings(const AMDemodSettings& settings, bool force = false);
-    void applyAudioSampleRate(int sampleRate);
-    void webapiFormatChannelSettings(SWGSDRangel::SWGChannelSettings& response, const AMDemodSettings& settings);
     void webapiFormatChannelReport(SWGSDRangel::SWGChannelReport& response);
     void webapiReverseSendSettings(QList<QString>& channelSettingsKeys, const AMDemodSettings& settings, bool force);
-
-    void processOneSample(Complex &ci);
 
 private slots:
     void networkManagerFinished(QNetworkReply *reply);

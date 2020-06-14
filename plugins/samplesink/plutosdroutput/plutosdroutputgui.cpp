@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,7 +24,7 @@
 #include "gui/glspectrum.h"
 #include "gui/crightclickenabler.h"
 #include "gui/basicdevicesettingsdialog.h"
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "plutosdr/deviceplutosdr.h"
 #include "plutosdroutput.h"
@@ -35,15 +36,16 @@ PlutoSDROutputGUI::PlutoSDROutputGUI(DeviceUISet *deviceUISet, QWidget* parent) 
     ui(new Ui::PlutoSDROutputGUI),
     m_deviceUISet(deviceUISet),
     m_settings(),
+    m_sampleRateMode(true),
     m_forceSettings(true),
     m_sampleSink(0),
     m_sampleRate(0),
     m_deviceCenterFrequency(0),
-    m_lastEngineState(DSPDeviceSinkEngine::StNotStarted),
+    m_lastEngineState(DeviceAPI::StNotStarted),
     m_doApplySettings(true),
     m_statusCounter(0)
 {
-    m_sampleSink = (PlutoSDROutput*) m_deviceUISet->m_deviceSinkAPI->getSampleSink();
+    m_sampleSink = (PlutoSDROutput*) m_deviceUISet->m_deviceAPI->getSampleSink();
 
     ui->setupUi(this);
     ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
@@ -202,12 +204,24 @@ void PlutoSDROutputGUI::on_loPPM_valueChanged(int value)
 void PlutoSDROutputGUI::on_swInterp_currentIndexChanged(int index)
 {
     m_settings.m_log2Interp = index > 5 ? 5 : index;
+    displaySampleRate();
+    m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Interp;
+    }
+
     sendSettings();
 }
 
 void PlutoSDROutputGUI::on_sampleRate_changed(quint64 value)
 {
     m_settings.m_devSampleRate = value;
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Interp;
+    }
+
     sendSettings();
 }
 
@@ -267,13 +281,48 @@ void PlutoSDROutputGUI::on_transverter_clicked()
     sendSettings();
 }
 
+void PlutoSDROutputGUI::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
+void PlutoSDROutputGUI::displaySampleRate()
+{
+    ui->sampleRate->blockSignals(true);
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, DevicePlutoSDR::srLowLimitFreq, DevicePlutoSDR::srHighLimitFreq);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Host to device sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2Interp);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, DevicePlutoSDR::srLowLimitFreq/(1<<m_settings.m_log2Interp), DevicePlutoSDR::srHighLimitFreq/(1<<m_settings.m_log2Interp));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2Interp));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Host to device sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
 void PlutoSDROutputGUI::displaySettings()
 {
     ui->transverter->setDeltaFrequency(m_settings.m_transverterDeltaFrequency);
     ui->transverter->setDeltaFrequencyActive(m_settings.m_transverterMode);
     updateFrequencyLimits();
     ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
     ui->loPPM->setValue(m_settings.m_LOppmTenths);
     ui->loPPMText->setText(QString("%1").arg(QString::number(m_settings.m_LOppmTenths/10.0, 'f', 1)));
@@ -323,24 +372,24 @@ void PlutoSDROutputGUI::blockApplySettings(bool block)
 
 void PlutoSDROutputGUI::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSinkAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSinkEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSinkEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSinkEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSinkEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSinkAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -369,7 +418,7 @@ void PlutoSDROutputGUI::updateStatus()
 
     if (m_statusCounter % 10 == 0) // 5s
     {
-        if (m_deviceUISet->m_deviceSinkAPI->isBuddyLeader()) {
+        if (m_deviceUISet->m_deviceAPI->isBuddyLeader()) {
             ((PlutoSDROutput *) m_sampleSink)->fetchTemperature();
         }
 
@@ -445,7 +494,7 @@ void PlutoSDROutputGUI::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateLabel->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
 }
 
 void PlutoSDROutputGUI::openDeviceSettingsDialog(const QPoint& p)

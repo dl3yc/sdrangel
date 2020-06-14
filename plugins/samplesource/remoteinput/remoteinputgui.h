@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,6 +19,7 @@
 #define INCLUDE_REMOTEINPUTGUI_H
 
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QWidget>
 #include <QNetworkRequest>
 
@@ -94,7 +96,7 @@ private:
 
     uint32_t m_countUnrecoverable;
     uint32_t m_countRecovered;
-    QTime m_eventsTime;
+    QElapsedTimer m_eventsTime;
 
 	bool m_doApplySettings;
     bool m_forceSettings;
@@ -134,6 +136,7 @@ private slots:
 	void updateStatus();
 	void networkManagerFinished(QNetworkReply *reply);
     void openDeviceSettingsDialog(const QPoint& p);
+    void openFileRecordDialog(const QPoint& p);
 };
 
 #endif // INCLUDE_REMOTEINPUTGUI_H

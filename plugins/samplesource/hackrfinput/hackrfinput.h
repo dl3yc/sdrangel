@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,7 +30,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class HackRFInputThread;
 class FileRecord;
 
@@ -115,7 +116,7 @@ public:
         { }
     };
 
-	HackRFInput(DeviceSourceAPI *deviceAPI);
+	HackRFInput(DeviceAPI *deviceAPI);
 	virtual ~HackRFInput();
 	virtual void destroy();
 
@@ -129,6 +130,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -153,9 +155,22 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const HackRFInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            HackRFInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
 
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	HackRFInputSettings m_settings;
 	struct hackrf_device* m_dev;
@@ -170,8 +185,7 @@ private:
     bool openDevice();
     void closeDevice();
 	bool applySettings(const HackRFInputSettings& settings, bool force);
-	void setDeviceCenterFrequency(quint64 freq);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const HackRFInputSettings& settings);
+	void setDeviceCenterFrequency(quint64 freq, qint32 LOppmTenths);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const HackRFInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);
 

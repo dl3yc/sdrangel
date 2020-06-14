@@ -1,7 +1,5 @@
 project(plutosdrdevice)
 
-set (CMAKE_CXX_STANDARD 11)
-
 set(plutosdrdevice_SOURCES
     deviceplutosdr.cpp
     deviceplutosdrbox.cpp
@@ -18,39 +16,27 @@ set(plutosdrdevice_HEADERS
     deviceplutosdrshared.h
 )
 
-if (BUILD_DEBIAN)
 include_directories(
-    .
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${LIBIIOSRC}
-)
-else (BUILD_DEBIAN)
-include_directories(
-    .
-    ${CMAKE_CURRENT_BINARY_DIR}
     ${LIBIIO_INCLUDE_DIR}
+    ${ICONV_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIRS}
 )
-endif (BUILD_DEBIAN)
-
-#add_definitions(${QT_DEFINITIONS})
-#add_definitions(-DQT_SHARED)
 
 add_library(plutosdrdevice SHARED
     ${plutosdrdevice_SOURCES}
 )
 
-set_target_properties(plutosdrdevice PROPERTIES DEFINE_SYMBOL "devices_EXPORTS")
+set_target_properties(plutosdrdevice
+    PROPERTIES DEFINE_SYMBOL "devices_EXPORTS")
 
-if (BUILD_DEBIAN)
 target_link_libraries(plutosdrdevice
-    iio
     sdrbase
-)
-else (BUILD_DEBIAN)
-target_link_libraries(plutosdrdevice
     ${LIBIIO_LIBRARIES}
-    sdrbase
+    ${ICONV_LIBRARY}
 )
-endif (BUILD_DEBIAN)
 
-install(TARGETS plutosdrdevice DESTINATION lib)
+if(LIBIIO_EXTERNAL)
+    add_dependencies(plutosdrdevice libiio)
+endif()
+
+install(TARGETS plutosdrdevice DESTINATION ${INSTALL_LIB_DIR})

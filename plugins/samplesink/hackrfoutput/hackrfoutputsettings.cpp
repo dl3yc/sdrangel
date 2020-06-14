@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,10 +32,13 @@ void HackRFOutputSettings::resetToDefaults()
 	m_LOppmTenths = 0;
 	m_biasT = false;
 	m_log2Interp = 0;
+    m_fcPos = FC_POS_CENTER;
 	m_lnaExt = false;
 	m_vgaGain = 22;
 	m_bandwidth = 1750000;
 	m_devSampleRate = 2400000;
+    m_transverterMode = false;
+	m_transverterDeltaFrequency = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -46,6 +50,7 @@ QByteArray HackRFOutputSettings::serialize() const
 	SimpleSerializer s(1);
 
 	s.writeS32(1, m_LOppmTenths);
+    s.writeS32(2, (int) m_fcPos);
 	s.writeBool(3, m_biasT);
 	s.writeU32(4, m_log2Interp);
 	s.writeBool(5, m_lnaExt);
@@ -56,6 +61,8 @@ QByteArray HackRFOutputSettings::serialize() const
     s.writeString(10, m_reverseAPIAddress);
     s.writeU32(11, m_reverseAPIPort);
     s.writeU32(12, m_reverseAPIDeviceIndex);
+    s.writeBool(13, m_transverterMode);
+    s.writeS64(14, m_transverterDeltaFrequency);
 
 	return s.final();
 }
@@ -73,8 +80,11 @@ bool HackRFOutputSettings::deserialize(const QByteArray& data)
 	if (d.getVersion() == 1)
 	{
 		uint32_t uintval;
+        int32_t intval;
 
 		d.readS32(1, &m_LOppmTenths, 0);
+        d.readS32(2, &intval, 2);
+        m_fcPos = (fcPos_t) (intval < 0 ? 0 : intval > 2 ? 2 : intval);
 		d.readBool(3, &m_biasT, false);
 		d.readU32(4, &m_log2Interp, 0);
 		d.readBool(5, &m_lnaExt, false);
@@ -93,6 +103,8 @@ bool HackRFOutputSettings::deserialize(const QByteArray& data)
 
         d.readU32(12, &uintval, 0);
         m_reverseAPIDeviceIndex = uintval > 99 ? 99 : uintval;
+        d.readBool(13, &m_transverterMode, false);
+        d.readS64(14, &m_transverterDeltaFrequency, 0);
 
 		return true;
 	}

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,10 +18,13 @@
 #ifndef DEVICES_PLUTOSDR_DEVICEPLUTOSDRSCAN_H_
 #define DEVICES_PLUTOSDR_DEVICEPLUTOSDRSCAN_H_
 
+#include <QString>
+
 #include <string>
 #include <vector>
 #include <map>
 
+#include "plugin/plugininterface.h"
 #include "export.h"
 
 class DEVICES_API DevicePlutoSDRScan
@@ -39,6 +43,7 @@ public:
     const std::string* getSerialAt(unsigned int index) const ;
     const std::string* getURIFromSerial(const std::string& serial) const;
     void getSerials(std::vector<std::string>& serials) const;
+    void enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices);
 
 private:
     std::vector<DeviceScan> m_scans;

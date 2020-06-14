@@ -74,7 +74,7 @@
          <item>
           <widget class="ButtonSwitch" name="record">
            <property name="toolTip">
-            <string>Toggle record I/Q samples from device</string>
+            <string>Left: toggle record I/Q samples from device - Right: select output file</string>
            </property>
            <property name="text">
             <string/>
@@ -200,7 +200,7 @@
        <item>
         <layout class="QHBoxLayout" name="freqRightBotLayout">
          <item>
-          <widget class="QLabel" name="deviceRateLabel">
+          <widget class="QLabel" name="deviceRateText">
            <property name="minimumSize">
             <size>
              <width>54</width>
@@ -310,22 +310,6 @@
       </widget>
      </item>
      <item>
-      <widget class="TransverterButton" name="transverter">
-       <property name="maximumSize">
-        <size>
-         <width>24</width>
-         <height>24</height>
-        </size>
-       </property>
-       <property name="toolTip">
-        <string>Transverter frequency translation dialog</string>
-       </property>
-       <property name="text">
-        <string>X</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="ExternalClockButton" name="extClock">
        <property name="toolTip">
         <string>External clock dialog</string>
@@ -353,6 +337,84 @@
      <property name="topMargin">
       <number>2</number>
      </property>
+     <item>
+      <widget class="QToolButton" name="sampleRateMode">
+       <property name="minimumSize">
+        <size>
+         <width>26</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>26</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Toggle between device to host (SR) and base band (BB) sample rate input</string>
+       </property>
+       <property name="text">
+        <string>SR</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="ValueDial" name="sampleRate" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>32</width>
+         <height>16</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Liberation Mono</family>
+         <pointsize>12</pointsize>
+         <weight>50</weight>
+         <bold>false</bold>
+        </font>
+       </property>
+       <property name="cursor">
+        <cursorShape>PointingHandCursor</cursorShape>
+       </property>
+       <property name="toolTip">
+        <string>Device to host sample rate</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="samplerateUnit">
+       <property name="text">
+        <string>S/s</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
      <item>
       <widget class="QLabel" name="hwDecimLabel">
        <property name="text">
@@ -468,69 +530,6 @@
          <string>64</string>
         </property>
        </item>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer_4">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QLabel" name="samplerateLabel">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="text">
-        <string>SR</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="ValueDial" name="sampleRate" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>32</width>
-         <height>16</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Liberation Mono</family>
-         <pointsize>12</pointsize>
-         <weight>50</weight>
-         <bold>false</bold>
-        </font>
-       </property>
-       <property name="cursor">
-        <cursorShape>PointingHandCursor</cursorShape>
-       </property>
-       <property name="toolTip">
-        <string>Device to host sample rate</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="samplerateUnit">
-       <property name="text">
-        <string>S/s</string>
-       </property>
       </widget>
      </item>
     </layout>
@@ -649,6 +648,22 @@
       <widget class="QLabel" name="lpFIRUnits">
        <property name="text">
         <string>kHz</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="TransverterButton" name="transverter">
+       <property name="maximumSize">
+        <size>
+         <width>24</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Transverter frequency translation dialog</string>
+       </property>
+       <property name="text">
+        <string>X</string>
        </property>
       </widget>
      </item>
@@ -909,7 +924,7 @@
         </size>
        </property>
        <property name="toolTip">
-        <string>Antenna select: No: none, Lo: 700:900M, Hi: 2:2.6G, Wi: wideband, T1: Tx1 LB, T2: Tx2 LB</string>
+        <string>Antenna select: No: none, NC: not connected, Lo: 700:900M, Hi: 2:2.6G, Wi: wideband, T1: Tx1 LB, T2: Tx2 LB</string>
        </property>
        <item>
         <property name="text">

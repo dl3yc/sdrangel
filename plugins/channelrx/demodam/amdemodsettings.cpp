@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -40,6 +41,7 @@ void AMDemodSettings::resetToDefaults()
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
     m_pll = false;
     m_syncAMOperation = SyncAMDSB;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -52,6 +54,7 @@ QByteArray AMDemodSettings::serialize() const
     SimpleSerializer s(1);
     s.writeS32(1, m_inputFrequencyOffset);
     s.writeS32(2, m_rfBandwidth/100);
+    s.writeS32(3, m_streamIndex);
     s.writeS32(4, m_volume*10);
     s.writeS32(5, m_squelch);
 
@@ -94,6 +97,7 @@ bool AMDemodSettings::deserialize(const QByteArray& data)
         d.readS32(1, &m_inputFrequencyOffset, 0);
         d.readS32(2, &tmp, 4);
         m_rfBandwidth = 100 * tmp;
+        d.readS32(3, &m_streamIndex, 0);
         d.readS32(4, &tmp, 20);
         m_volume = tmp * 0.1;
         d.readS32(5, &tmp, -40);

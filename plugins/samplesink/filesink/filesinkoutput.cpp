@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -26,7 +27,7 @@
 #include "dsp/dspengine.h"
 #include "dsp/filerecord.h"
 
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 
 #include "filesinkoutput.h"
 #include "filesinkthread.h"
@@ -39,7 +40,7 @@ MESSAGE_CLASS_DEFINITION(FileSinkOutput::MsgConfigureFileSinkStreamTiming, Messa
 MESSAGE_CLASS_DEFINITION(FileSinkOutput::MsgReportFileSinkGeneration, Message)
 MESSAGE_CLASS_DEFINITION(FileSinkOutput::MsgReportFileSinkStreamTiming, Message)
 
-FileSinkOutput::FileSinkOutput(DeviceSinkAPI *deviceAPI) :
+FileSinkOutput::FileSinkOutput(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
 	m_settings(),
 	m_fileSinkThread(0),
@@ -48,6 +49,7 @@ FileSinkOutput::FileSinkOutput(DeviceSinkAPI *deviceAPI) :
 	m_startingTimeStamp(0),
 	m_masterTimer(deviceAPI->getMasterTimer())
 {
+    m_deviceAPI->setNbSinkStreams(1);
 }
 
 FileSinkOutput::~FileSinkOutput()
@@ -213,14 +215,14 @@ bool FileSinkOutput::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initGeneration())
+            if (m_deviceAPI->initDeviceEngine())
             {
-                m_deviceAPI->startGeneration();
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopGeneration();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         return true;

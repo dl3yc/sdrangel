@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,13 +17,13 @@
 
 #include "udpsourcegui.h"
 
-#include "device/devicesinkapi.h"
 #include "device/deviceuiset.h"
 #include "dsp/spectrumvis.h"
 #include "dsp/dspengine.h"
 #include "util/simpleserializer.h"
 #include "util/db.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "plugin/pluginapi.h"
 #include "mainwindow.h"
 
@@ -129,9 +130,9 @@ UDPSourceGUI::UDPSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
     connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
     setAttribute(Qt::WA_DeleteOnClose, true);
 
-    m_spectrumVis = new SpectrumVis(SDR_TX_SCALEF, ui->glSpectrum);
     m_udpSource = (UDPSource*) channelTx;
-    m_udpSource->setSpectrumSink(m_spectrumVis);
+    m_spectrumVis = m_udpSource->getSpectrumVis();
+    m_spectrumVis->setGLSpectrum(ui->glSpectrum);
     m_udpSource->setMessageQueueToGUI(getInputMessageQueue());
 
     ui->fmDeviation->setEnabled(false);
@@ -143,13 +144,16 @@ UDPSourceGUI::UDPSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
     ui->glSpectrum->setSampleRate(ui->sampleRate->text().toInt());
     ui->glSpectrum->setDisplayWaterfall(true);
     ui->glSpectrum->setDisplayMaxHold(true);
-    m_spectrumVis->configure(m_spectrumVis->getInputMessageQueue(),
-            64, // FFT size
-            10, // overlapping %
-            0,  // number of averaging samples
-            0,  // no averaging
-            FFTWindow::BlackmanHarris,
-            false); // logarithmic scale
+    m_spectrumVis->configure(
+        64, // FFT size
+        0, // Ref level (dB)
+        100, // Power range (dB)
+        10, // overlapping %
+        0,  // number of averaging samples
+        SpectrumVis::AvgModeNone,  // no averaging
+        FFTWindow::BlackmanHarris,
+        false // logarithmic scale
+    );
 
     ui->glSpectrum->connectTimer(MainWindow::getInstance()->getMasterTimer());
     connect(&MainWindow::getInstance()->getMasterTimer(), SIGNAL(timeout()), this, SLOT(tick()));
@@ -159,6 +163,7 @@ UDPSourceGUI::UDPSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
     m_channelMarker.setCenterFrequency(0);
     m_channelMarker.setColor(m_settings.m_rgbColor);
     m_channelMarker.setTitle("UDP Sample Sink");
+    m_channelMarker.setSourceOrSinkStream(false);
     m_channelMarker.blockSignals(false);
     m_channelMarker.setVisible(true); // activate signal on the last setting only
 
@@ -168,10 +173,10 @@ UDPSourceGUI::UDPSourceGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 
     connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
 
-    ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+    ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
     connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
-    connect(m_udpSource, SIGNAL(levelChanged(qreal, qreal, int)), ui->volumeMeter, SLOT(levelChanged(qreal, qreal, int)));
+    m_udpSource->setLevelMeter(ui->volumeMeter);
 
     displaySettings();
     applySettings(true);
@@ -181,7 +186,6 @@ UDPSourceGUI::~UDPSourceGUI()
 {
     m_deviceUISet->removeTxChannelInstance(this);
     delete m_udpSource; // TODO: check this: when the GUI closes it has to delete the modulator
-    delete m_spectrumVis;
     delete ui;
 }
 
@@ -217,6 +221,7 @@ void UDPSourceGUI::displaySettings()
 
     setTitleColor(m_settings.m_rgbColor);
     this->setWindowTitle(m_channelMarker.getTitle());
+    displayStreamIndex();
 
     blockApplySettings(true);
 
@@ -257,6 +262,15 @@ void UDPSourceGUI::displaySettings()
     ui->applyBtn->setStyleSheet("QPushButton { background:rgb(79,79,79); }");
 
     blockApplySettings(false);
+}
+
+void UDPSourceGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void UDPSourceGUI::channelMarkerChangedByCursor()
@@ -471,28 +485,47 @@ void UDPSourceGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void UDPSourceGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_channelMarker.getTitle());
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_channelMarker.getTitle());
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_udpSource->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 void UDPSourceGUI::leaveEvent(QEvent*)

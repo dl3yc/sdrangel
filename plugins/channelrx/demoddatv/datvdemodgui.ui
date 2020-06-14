@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>530</width>
-    <height>442</height>
+    <height>444</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -204,7 +204,7 @@
     <enum>QTabWidget::West</enum>
    </property>
    <property name="currentIndex">
-    <number>1</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="datvTab">
     <attribute name="title">
@@ -233,6 +233,9 @@
      </property>
      <property name="title">
       <string>DATV Settings</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
      </property>
      <widget class="QWidget" name="layoutWidget">
       <property name="geometry">
@@ -307,6 +310,11 @@
        <item>
         <property name="text">
          <string>DVB-S</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>DVB-S2</string>
         </property>
        </item>
       </widget>
@@ -454,7 +462,7 @@
         <string>HARD METRIC</string>
        </property>
       </widget>
-      <widget class="QLabel" name="label">
+      <widget class="QLabel" name="sSecLabel">
        <property name="geometry">
         <rect>
          <x>100</x>
@@ -499,7 +507,7 @@
         <number>32</number>
        </property>
       </widget>
-      <widget class="QLabel" name="label_3">
+      <widget class="QLabel" name="notchFilterLabel">
        <property name="geometry">
         <rect>
          <x>100</x>
@@ -544,7 +552,7 @@
         <string>Data: 0</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="pushButton_2">
+      <widget class="QPushButton" name="resetDefaults">
        <property name="geometry">
         <rect>
          <x>230</x>
@@ -552,6 +560,9 @@
          <width>21</width>
          <height>22</height>
         </rect>
+       </property>
+       <property name="toolTip">
+        <string>Reset to defaults</string>
        </property>
        <property name="text">
         <string>R</string>
@@ -570,7 +581,7 @@
         <string>Symbol rate</string>
        </property>
        <property name="minimum">
-        <number>1</number>
+        <number>1000</number>
        </property>
        <property name="maximum">
         <number>1024000000</number>
@@ -595,7 +606,7 @@
         <string>Speed: 0b/s</string>
        </property>
       </widget>
-      <widget class="QLabel" name="label_4">
+      <widget class="QLabel" name="bufferLabel">
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -658,7 +669,7 @@
         <number>35</number>
        </property>
       </widget>
-      <widget class="QLabel" name="label_5">
+      <widget class="QLabel" name="rollOffLabel">
        <property name="geometry">
         <rect>
          <x>106</x>
@@ -671,7 +682,7 @@
         <string>R.off</string>
        </property>
       </widget>
-      <widget class="QLabel" name="label_6">
+      <widget class="QLabel" name="excursionLabel">
        <property name="geometry">
         <rect>
          <x>180</x>
@@ -706,7 +717,113 @@
         <number>10</number>
        </property>
       </widget>
+      <widget class="QLabel" name="statusText">
+       <property name="geometry">
+        <rect>
+         <x>100</x>
+         <y>10</y>
+         <width>151</width>
+         <height>19</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>...</string>
+       </property>
+      </widget>
      </widget>
+    </widget>
+    <widget class="QWidget" name="horizontalLayoutWidget">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>260</y>
+       <width>481</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <layout class="QHBoxLayout" name="udpLayout">
+      <item>
+       <widget class="ButtonSwitch" name="udpTS">
+        <property name="toolTip">
+         <string>Copy transport stream to UDP</string>
+        </property>
+        <property name="text">
+         <string>UDP</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="udpTSAddressLabel">
+        <property name="toolTip">
+         <string/>
+        </property>
+        <property name="text">
+         <string>Addr</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="udpTSAddress">
+        <property name="maximumSize">
+         <size>
+          <width>140</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Destination UDP address</string>
+        </property>
+        <property name="inputMask">
+         <string>000.000.000.000</string>
+        </property>
+        <property name="text">
+         <string>127.0.0.1</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="udpTSPortLabel">
+        <property name="text">
+         <string>Port</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="udpTSPort">
+        <property name="maximumSize">
+         <size>
+          <width>60</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Destination UDP port</string>
+        </property>
+        <property name="inputMask">
+         <string>00000</string>
+        </property>
+        <property name="text">
+         <string>9998</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
     </widget>
    </widget>
    <widget class="QWidget" name="videoTab">
@@ -717,31 +834,22 @@
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>0</y>
+       <y>283</y>
        <width>496</width>
-       <height>385</height>
+       <height>111</height>
       </rect>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>496</width>
-       <height>385</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>496</width>
-       <height>385</height>
-      </size>
      </property>
      <property name="title">
       <string>VIDEO Stream</string>
      </property>
-     <widget class="QTextEdit" name="textEdit">
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <widget class="QTextEdit" name="streamInfo">
       <property name="geometry">
        <rect>
-        <x>0</x>
-        <y>300</y>
+        <x>2</x>
+        <y>20</y>
         <width>281</width>
         <height>81</height>
        </rect>
@@ -756,13 +864,13 @@
        <bool>false</bool>
       </property>
      </widget>
-     <widget class="QPushButton" name="pushButton_4">
+     <widget class="QPushButton" name="fullScreen">
       <property name="geometry">
        <rect>
         <x>400</x>
-        <y>350</y>
-        <width>91</width>
-        <height>27</height>
+        <y>76</y>
+        <width>90</width>
+        <height>26</height>
        </rect>
       </property>
       <property name="toolTip">
@@ -772,62 +880,6 @@
        <string>Full Screen</string>
       </property>
      </widget>
-     <widget class="QPushButton" name="pushButton_3">
-      <property name="geometry">
-       <rect>
-        <x>400</x>
-        <y>300</y>
-        <width>91</width>
-        <height>27</height>
-       </rect>
-      </property>
-      <property name="toolTip">
-       <string>Start/Stop video streaming</string>
-      </property>
-      <property name="text">
-       <string>  Video</string>
-      </property>
-     </widget>
-     <widget class="QWidget" name="formLayoutWidget">
-      <property name="geometry">
-       <rect>
-        <x>0</x>
-        <y>20</y>
-        <width>488</width>
-        <height>272</height>
-       </rect>
-      </property>
-      <layout class="QFormLayout" name="formLayout">
-       <item row="0" column="0">
-        <widget class="DATVideoRender" name="screenTV_2" native="true">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>480</width>
-           <height>270</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>355</width>
-           <height>270</height>
-          </size>
-         </property>
-         <property name="toolTip">
-          <string>Video</string>
-         </property>
-         <property name="styleSheet">
-          <string notr="true"/>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
      <widget class="QCheckBox" name="chkTS">
       <property name="enabled">
        <bool>false</bool>
@@ -835,7 +887,7 @@
       <property name="geometry">
        <rect>
         <x>300</x>
-        <y>320</y>
+        <y>40</y>
         <width>85</width>
         <height>20</height>
        </rect>
@@ -857,7 +909,7 @@
       <property name="geometry">
        <rect>
         <x>300</x>
-        <y>340</y>
+        <y>60</y>
         <width>85</width>
         <height>20</height>
        </rect>
@@ -879,7 +931,7 @@
       <property name="geometry">
        <rect>
         <x>300</x>
-        <y>360</y>
+        <y>80</y>
         <width>85</width>
         <height>20</height>
        </rect>
@@ -901,7 +953,7 @@
       <property name="geometry">
        <rect>
         <x>300</x>
-        <y>300</y>
+        <y>20</y>
         <width>85</width>
         <height>20</height>
        </rect>
@@ -916,6 +968,132 @@
        <bool>true</bool>
       </property>
      </widget>
+     <widget class="QToolButton" name="audioMute">
+      <property name="geometry">
+       <rect>
+        <x>430</x>
+        <y>26</y>
+        <width>24</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Audio mute (right click: Audio select)</string>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="icon">
+       <iconset resource="../../../sdrgui/resources/res.qrc">
+        <normaloff>:/sound_on.png</normaloff>
+        <normalon>:/sound_off.png</normalon>:/sound_on.png</iconset>
+      </property>
+      <property name="checkable">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QSlider" name="audioVolume">
+      <property name="geometry">
+       <rect>
+        <x>400</x>
+        <y>56</y>
+        <width>90</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Audio volume control</string>
+      </property>
+      <property name="minimum">
+       <number>0</number>
+      </property>
+      <property name="maximum">
+       <number>100</number>
+      </property>
+      <property name="pageStep">
+       <number>1</number>
+      </property>
+      <property name="value">
+       <number>80</number>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+     <widget class="QLabel" name="audioVolumeText">
+      <property name="geometry">
+       <rect>
+        <x>460</x>
+        <y>26</y>
+        <width>24</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Audio volume</string>
+      </property>
+      <property name="text">
+       <string>100</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+     <widget class="QToolButton" name="videoMute">
+      <property name="geometry">
+       <rect>
+        <x>400</x>
+        <y>26</y>
+        <width>24</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>Video mute</string>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+      <property name="icon">
+       <iconset resource="../../../sdrgui/resources/res.qrc">
+        <normaloff>:/film.png</normaloff>
+        <normalon>:/no_film.png</normalon>:/film.png</iconset>
+      </property>
+      <property name="checkable">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="verticalLayoutWidget_2">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>501</width>
+       <height>281</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="screenLayout">
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <property name="leftMargin">
+       <number>4</number>
+      </property>
+      <property name="rightMargin">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="DATVideoRender" name="screenTV_2" native="true">
+        <property name="maximumSize">
+         <size>
+          <width>490</width>
+          <height>270</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </widget>
   </widget>
@@ -945,7 +1123,14 @@
    <header>gui/tvscreen.h</header>
    <container>1</container>
   </customwidget>
+  <customwidget>
+   <class>ButtonSwitch</class>
+   <extends>QToolButton</extends>
+   <header>gui/buttonswitch.h</header>
+  </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../../../sdrgui/resources/res.qrc"/>
+ </resources>
  <connections/>
 </ui>

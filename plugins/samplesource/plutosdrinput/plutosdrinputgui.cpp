@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,13 +18,14 @@
 #include <stdio.h>
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
 #include "gui/glspectrum.h"
 #include "gui/crightclickenabler.h"
 #include "gui/basicdevicesettingsdialog.h"
-#include "device/devicesourceapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "plutosdr/deviceplutosdr.h"
 #include "plutosdrinput.h"
@@ -35,15 +37,16 @@ PlutoSDRInputGui::PlutoSDRInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
     ui(new Ui::PlutoSDRInputGUI),
     m_deviceUISet(deviceUISet),
     m_settings(),
+    m_sampleRateMode(true),
     m_forceSettings(true),
     m_sampleSource(NULL),
     m_sampleRate(0),
     m_deviceCenterFrequency(0),
-    m_lastEngineState(DSPDeviceSourceEngine::StNotStarted),
+    m_lastEngineState(DeviceAPI::StNotStarted),
     m_doApplySettings(true),
     m_statusCounter(0)
 {
-    m_sampleSource = (PlutoSDRInput*) m_deviceUISet->m_deviceSourceAPI->getSampleSource();
+    m_sampleSource = (PlutoSDRInput*) m_deviceUISet->m_deviceAPI->getSampleSource();
 
     ui->setupUi(this);
     ui->centerFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
@@ -66,6 +69,9 @@ PlutoSDRInputGui::PlutoSDRInputGui(DeviceUISet *deviceUISet, QWidget* parent) :
 
     CRightClickEnabler *startStopRightClickEnabler = new CRightClickEnabler(ui->startStop);
     connect(startStopRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openDeviceSettingsDialog(const QPoint &)));
+
+    CRightClickEnabler *fileRecordRightClickEnabler = new CRightClickEnabler(ui->record);
+    connect(fileRecordRightClickEnabler, SIGNAL(rightClick(const QPoint &)), this, SLOT(openFileRecordDialog(const QPoint &)));
 
     blockApplySettings(true);
     displaySettings();
@@ -172,6 +178,23 @@ bool PlutoSDRInputGui::handleMessage(const Message& message)
 
         return true;
     }
+    else if (PlutoSDRInput::MsgFileRecord::match(message)) // API action "record" feedback
+    {
+        const PlutoSDRInput::MsgFileRecord& notif = (const PlutoSDRInput::MsgFileRecord&) message;
+        bool record = notif.getStartStop();
+
+        ui->record->blockSignals(true);
+        ui->record->setChecked(record);
+
+        if (record) {
+            ui->record->setStyleSheet("QToolButton { background-color : red; }");
+        } else {
+            ui->record->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
+        }
+
+        ui->record->blockSignals(false);
+        return true;
+    }
     else
     {
         return false;
@@ -224,21 +247,54 @@ void PlutoSDRInputGui::on_iqImbalance_toggled(bool checked)
     sendSettings();
 }
 
+void PlutoSDRInputGui::on_rfDCOffset_toggled(bool checked)
+{
+    m_settings.m_hwRFDCBlock = checked;
+    sendSettings();
+}
+
+void PlutoSDRInputGui::on_bbDCOffset_toggled(bool checked)
+{
+    m_settings.m_hwBBDCBlock = checked;
+    sendSettings();
+}
+
+void PlutoSDRInputGui::on_hwIQImbalance_toggled(bool checked)
+{
+    m_settings.m_hwIQCorrection = checked;
+    sendSettings();
+}
+
+
 void PlutoSDRInputGui::on_swDecim_currentIndexChanged(int index)
 {
     m_settings.m_log2Decim = index > 6 ? 6 : index;
+    displaySampleRate();
+    m_settings.m_devSampleRate = ui->sampleRate->getValueNew();
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Decim;
+    }
+
     sendSettings();
 }
 
 void PlutoSDRInputGui::on_fcPos_currentIndexChanged(int index)
 {
     m_settings.m_fcPos = (PlutoSDRInputSettings::fcPos_t) (index < (int) PlutoSDRInputSettings::FC_POS_END ? index : PlutoSDRInputSettings::FC_POS_CENTER);
+    displayFcTooltip();
     sendSettings();
 }
 
 void PlutoSDRInputGui::on_sampleRate_changed(quint64 value)
 {
     m_settings.m_devSampleRate = value;
+
+    if (!m_sampleRateMode) {
+        m_settings.m_devSampleRate <<= m_settings.m_log2Decim;
+    }
+
+    displayFcTooltip();
     sendSettings();
 }
 
@@ -305,16 +361,66 @@ void PlutoSDRInputGui::on_transverter_clicked()
     sendSettings();
 }
 
+void PlutoSDRInputGui::on_sampleRateMode_toggled(bool checked)
+{
+    m_sampleRateMode = checked;
+    displaySampleRate();
+}
+
+void PlutoSDRInputGui::displaySampleRate()
+{
+    ui->sampleRate->blockSignals(true);
+    displayFcTooltip();
+
+    if (m_sampleRateMode)
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(60,60,60); }");
+        ui->sampleRateMode->setText("SR");
+        ui->sampleRate->setValueRange(8, DevicePlutoSDR::srLowLimitFreq, DevicePlutoSDR::srHighLimitFreq);
+        ui->sampleRate->setValue(m_settings.m_devSampleRate);
+        ui->sampleRate->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Baseband sample rate (S/s)");
+        uint32_t basebandSampleRate = m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim);
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(basebandSampleRate / 1000.0f, 'g', 5)));
+    }
+    else
+    {
+        ui->sampleRateMode->setStyleSheet("QToolButton { background:rgb(50,50,50); }");
+        ui->sampleRateMode->setText("BB");
+        ui->sampleRate->setValueRange(8, DevicePlutoSDR::srLowLimitFreq/(1<<m_settings.m_log2Decim), DevicePlutoSDR::srHighLimitFreq/(1<<m_settings.m_log2Decim));
+        ui->sampleRate->setValue(m_settings.m_devSampleRate/(1<<m_settings.m_log2Decim));
+        ui->sampleRate->setToolTip("Baseband sample rate (S/s)");
+        ui->deviceRateText->setToolTip("Device to host sample rate (S/s)");
+        ui->deviceRateText->setText(tr("%1k").arg(QString::number(m_settings.m_devSampleRate / 1000.0f, 'g', 5)));
+    }
+
+    ui->sampleRate->blockSignals(false);
+}
+
+void PlutoSDRInputGui::displayFcTooltip()
+{
+    int32_t fShift = DeviceSampleSource::calculateFrequencyShift(
+        m_settings.m_log2Decim,
+        (DeviceSampleSource::fcPos_t) m_settings.m_fcPos,
+        m_settings.m_devSampleRate,
+        DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD
+    );
+    ui->fcPos->setToolTip(tr("Relative position of device center frequency: %1 kHz").arg(QString::number(fShift / 1000.0f, 'g', 5)));
+}
+
 void PlutoSDRInputGui::displaySettings()
 {
     ui->transverter->setDeltaFrequency(m_settings.m_transverterDeltaFrequency);
     ui->transverter->setDeltaFrequencyActive(m_settings.m_transverterMode);
     updateFrequencyLimits();
     ui->centerFrequency->setValue(m_settings.m_centerFrequency / 1000);
-    ui->sampleRate->setValue(m_settings.m_devSampleRate);
+    displaySampleRate();
 
     ui->dcOffset->setChecked(m_settings.m_dcBlock);
     ui->iqImbalance->setChecked(m_settings.m_iqCorrection);
+    ui->bbDCOffset->setChecked(m_settings.m_hwBBDCBlock);
+    ui->rfDCOffset->setChecked(m_settings.m_hwRFDCBlock);
+    ui->hwIQImbalance->setChecked(m_settings.m_hwIQCorrection);
     ui->loPPM->setValue(m_settings.m_LOppmTenths);
     ui->loPPMText->setText(QString("%1").arg(QString::number(m_settings.m_LOppmTenths/10.0, 'f', 1)));
 
@@ -365,24 +471,24 @@ void PlutoSDRInputGui::blockApplySettings(bool block)
 
 void PlutoSDRInputGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSourceAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSourceEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSourceEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSourceEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSourceEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSourceAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
@@ -396,9 +502,9 @@ void PlutoSDRInputGui::updateStatus()
         uint32_t adcRate = ((PlutoSDRInput *) m_sampleSource)->getADCSampleRate();
 
         if (adcRate < 100000000) {
-            ui->adcRateLabel->setText(tr("%1k").arg(QString::number(adcRate / 1000.0f, 'g', 5)));
+            ui->adcRateText->setText(tr("%1k").arg(QString::number(adcRate / 1000.0f, 'g', 5)));
         } else {
-            ui->adcRateLabel->setText(tr("%1M").arg(QString::number(adcRate / 1000000.0f, 'g', 5)));
+            ui->adcRateText->setText(tr("%1M").arg(QString::number(adcRate / 1000000.0f, 'g', 5)));
         }
     }
 
@@ -414,7 +520,7 @@ void PlutoSDRInputGui::updateStatus()
 
     if (m_statusCounter % 10 == 0) // 5s
     {
-        if (m_deviceUISet->m_deviceSourceAPI->isBuddyLeader()) {
+        if (m_deviceUISet->m_deviceAPI->isBuddyLeader()) {
             ((PlutoSDRInput *) m_sampleSource)->fetchTemperature();
         }
 
@@ -490,7 +596,7 @@ void PlutoSDRInputGui::updateSampleRateAndFrequency()
 {
     m_deviceUISet->getSpectrum()->setSampleRate(m_sampleRate);
     m_deviceUISet->getSpectrum()->setCenterFrequency(m_deviceCenterFrequency);
-    ui->deviceRateLabel->setText(tr("%1k").arg(QString::number(m_sampleRate / 1000.0f, 'g', 5)));
+    displaySampleRate();
 }
 
 void PlutoSDRInputGui::openDeviceSettingsDialog(const QPoint& p)
@@ -510,4 +616,30 @@ void PlutoSDRInputGui::openDeviceSettingsDialog(const QPoint& p)
     m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
 
     sendSettings();
+}
+
+void PlutoSDRInputGui::openFileRecordDialog(const QPoint& p)
+{
+    QFileDialog fileDialog(
+        this,
+        tr("Save I/Q record file"),
+        m_settings.m_fileRecordName,
+        tr("SDR I/Q Files (*.sdriq)")
+    );
+
+    fileDialog.setOptions(QFileDialog::DontUseNativeDialog);
+    fileDialog.setFileMode(QFileDialog::AnyFile);
+    fileDialog.move(p);
+    QStringList fileNames;
+
+    if (fileDialog.exec())
+    {
+        fileNames = fileDialog.selectedFiles();
+
+        if (fileNames.size() > 0)
+        {
+            m_settings.m_fileRecordName = fileNames.at(0);
+            sendSettings();
+        }
+    }
 }

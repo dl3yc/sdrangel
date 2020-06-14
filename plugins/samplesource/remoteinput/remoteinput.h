@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -32,7 +33,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class RemoteInputUDPHandler;
 class FileRecord;
 
@@ -267,7 +268,7 @@ public:
         { }
     };
 
-	RemoteInput(DeviceSourceAPI *deviceAPI);
+	RemoteInput(DeviceAPI *deviceAPI);
 	virtual ~RemoteInput();
 	virtual void destroy();
 
@@ -281,6 +282,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue);
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 	std::time_t getStartingTimeStamp() const;
@@ -311,8 +313,22 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const RemoteInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            RemoteInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	RemoteInputSettings m_settings;
 	RemoteInputUDPHandler* m_remoteInputUDPHandler;
@@ -324,7 +340,6 @@ private:
     QNetworkRequest m_networkRequest;
 
     void applySettings(const RemoteInputSettings& settings, bool force = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const RemoteInputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const RemoteInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

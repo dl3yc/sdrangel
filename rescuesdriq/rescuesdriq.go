@@ -90,7 +90,7 @@ func copyContent(reader *bufio.Reader, writer *bufio.Writer, blockSize uint) {
 				sz += int64(n)
 				break
 			} else {
-				fmt.Println("An error occured during content copy. Aborting")
+				fmt.Println("An error occurred during content copy. Aborting")
 				break
 			}
 		} else {
@@ -137,16 +137,19 @@ func main() {
 		if flagSeen["out"] {
 			if flagSeen["sr"] {
 				headerOrigin.SampleRate = uint32(*sampleRate)
-			} else if flagSeen["cf"] {
+			}
+			if flagSeen["cf"] {
 				headerOrigin.CenterFrequency = *centerFreq
-			} else if flagSeen["sz"] {
+			}
+			if flagSeen["sz"] {
 				if (*sampleSize == 16) || (*sampleSize == 24) {
 					headerOrigin.SampleSize = uint32(*sampleSize)
 				} else {
 					fmt.Println("Incorrect sample size specified. Defaulting to 16")
 					headerOrigin.SampleSize = 16
 				}
-			} else if flagSeen["ts"] {
+			}
+			if flagSeen["ts"] {
 				t, err := time.Parse(time.RFC3339, *timeStr)
 				if err == nil {
 					headerOrigin.StartTimestamp = t.Unix()

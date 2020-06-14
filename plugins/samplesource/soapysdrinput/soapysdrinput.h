@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -30,7 +31,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class SoapySDRInputThread;
 class FileRecord;
 
@@ -137,7 +138,7 @@ public:
         { }
     };
 
-    SoapySDRInput(DeviceSourceAPI *deviceAPI);
+    SoapySDRInput(DeviceAPI *deviceAPI);
     virtual ~SoapySDRInput();
     virtual void destroy();
 
@@ -153,6 +154,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     virtual const QString& getDeviceDescription() const;
     virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
     virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -201,8 +203,22 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const SoapySDRInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            SoapySDRInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
 private:
-    DeviceSourceAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
     QMutex m_mutex;
     SoapySDRInputSettings m_settings;
     QString m_deviceDescription;
@@ -221,10 +237,9 @@ private:
     bool setDeviceCenterFrequency(SoapySDR::Device *dev, int requestedChannel, quint64 freq_hz, int loPpmTenths);
     void updateGains(SoapySDR::Device *dev, int requestedChannel, SoapySDRInputSettings& settings);
     void updateTunableElements(SoapySDR::Device *dev, int requestedChannel, SoapySDRInputSettings& settings);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const SoapySDRInputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
-    QVariant webapiVariantFromArgValue(SWGSDRangel::SWGArgValue *argValue);
-    void webapiFormatArgValue(const QVariant& v, SWGSDRangel::SWGArgValue *argValue);
+    static QVariant webapiVariantFromArgValue(SWGSDRangel::SWGArgValue *argValue);
+    static void webapiFormatArgValue(const QVariant& v, SWGSDRangel::SWGArgValue *argValue);
     void webapiFormatArgInfo(const SoapySDR::ArgInfo& arg, SWGSDRangel::SWGArgInfo *argInfo);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const SoapySDRInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

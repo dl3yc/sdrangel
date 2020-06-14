@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -27,7 +28,7 @@
 #include "limesdr/devicelimesdrshared.h"
 #include "limesdrinputsettings.h"
 
-class DeviceSourceAPI;
+class DeviceAPI;
 class LimeSDRInputThread;
 class FileRecord;
 class QNetworkAccessManager;
@@ -203,7 +204,7 @@ public:
         { }
     };
 
-    LimeSDRInput(DeviceSourceAPI *deviceAPI);
+    LimeSDRInput(DeviceAPI *deviceAPI);
     virtual ~LimeSDRInput();
     virtual void destroy();
 
@@ -217,6 +218,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     virtual const QString& getDeviceDescription() const;
     virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
     virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -245,14 +247,29 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const LimeSDRInputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            LimeSDRInputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     std::size_t getChannelIndex();
     void getLORange(float& minF, float& maxF) const;
     void getSRRange(float& minF, float& maxF) const;
     void getLPRange(float& minF, float& maxF) const;
     uint32_t getHWLog2Decim() const;
+    DeviceLimeSDRParams::LimeType getLimeType() const;
 
 private:
-    DeviceSourceAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
     QMutex m_mutex;
     LimeSDRInputSettings m_settings;
     LimeSDRInputThread* m_limeSDRInputThread;
@@ -274,7 +291,6 @@ private:
     void suspendTxBuddies();
     void resumeTxBuddies();
     bool applySettings(const LimeSDRInputSettings& settings, bool force = false, bool forceNCOFrequency = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const LimeSDRInputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const LimeSDRInputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

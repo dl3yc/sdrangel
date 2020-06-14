@@ -13,11 +13,13 @@ This plugin can be used to analyze the complex signal received in its passband. 
   - Power i.e. squared magnitude log (dB)
   - Phase
   - Phase derivative (instant frequency)
+  - Direction Of Arrival on Positive side
+  - Direction Of Arrival on Negative side
   - BPSK symbol mapping
   - QPSK symbol mapping
   - 8-PSK symbol mapping
   - 16-PSK symbol mapping
-  
+
 The same waveforms can be used to trigger the scope trace
 
 <h2>B. General interface</h2>
@@ -31,10 +33,10 @@ The interface is essentially divided in the following sections
   3. Scope global controls
   4. Scope trace control
   5. Scope trigger control
-  
+
 Note 1: the scope trace is updated continuously for sweep times of 1 second or more else the display is refreshed only when the trace finishes.
 
-Note 2: the spectrum view (Channel spectrum) is not presented here.  
+Note 2: the spectrum view (Channel spectrum) is not presented here.
 
 <h2>C. Channel controls</h2>
 
@@ -44,40 +46,23 @@ Note 2: the spectrum view (Channel spectrum) is not presented here.
 
 Use the wheels to adjust the frequency shift in Hz from the center frequency of reception. Left click on a digit sets the cursor position at this digit. Right click on a digit sets all digits on the right to zero. This effectively floors value at the digit position. Wheels are moved with the mousewheel while pointing at the wheel or by selecting the wheel with the left mouse click and using the keyboard arrows. Pressing shift simultaneously moves digit by 5 and pressing control moves it by 2.
 
-<h3>2: Locked loop</h3>
+<h3>2: Decimation by a power of two</h3>
 
-Locks a PLL or FLL (depends on control 3) on the signal and mixes its NCO with the input signal. This is mostly useful for carrier recovery on PSK modulations (PLL is used). This effectively de-rotates the signal and symbol points (constellation) can be seen in XY mode with real part as X and imagiary part as Y. 
+This combo can select half-band decimation from baseband sample rate by a power of two.
 
-When the PLL is locked the icon lights up in green. The frequency shift from carrier appears in the tooltip. Locking indicator is pretty sharp with about +/- 100 Hz range. The FLL has no indicator.
- 
-<h3>3: Locked loop mode</h3>
+<h3>3: Toggle the rational downsampler</h3>
 
-Use this combo to control the locked loop type:
+The channel sample rate is given by the baseband sample rate possibly decimated by a power of two with the control above. This sample rate can be optionally further downsampled to any value between 1.0 and 0.5 using a rational downsampler. Thus the final sample rate available to the analyzer (sink sample rate) can take any value between consecutive half-band decimator values. In conjunction with the decimator this permits a precise control of the timings independently of the baseband sample rate. Some devices are flexible on their sample rate some like the Airspy are not.
 
-  - 1: PLL with no phase modulation. Locks to CW carrier.
-  - 2: PLL for BPSK modulation (bi-phase). Locks to a BPSK transmission  
-  - 4: PLL for QPSK modulation (quad-phase). Locks to a QPSK transmission  
-  - 8: PLL for 8-PSK modulation (octo-phase). Locks to a 8-PSK transmission  
-  - 16: PLL for 16-PSK modulation (16-phase). Locks to a 16-PSK transmission
-  - F: FLL. Actually a frequency follower. This effectively implements an AFC for FM modulations.  
+<h3>4: Rational downsampler output rate</h3>
 
-<h3>4: Toggle the rational downsampler</h3>
+Use the wheels to adjust the sample rate. Left click on a digit sets the cursor position at this digit. Right click on a digit sets all digits on the right to zero. This effectively floors value at the digit position. The minimum value is 2000 S/s and the maximum value is the source plugin output sample rate. Wheels are moved with the mousewheel while pointing at the wheel or by selecting the wheel with the left mouse click and using the keyboard arrows. Pressing shift simultaneously moves digit by 5 and pressing control moves it by 2.
 
-The input channel sample rate is given by the source device sample rate possibly downsampled by a power of two in the source device plugin. This input sample rate can be optionally downsampled to any value using a rational downsampler. This allows a precise control of the timings independently of the source plugin sample rate. Some devices are flexible on their sample rate some like the Airspy are not.
+<h3>5: Analyzer (sink) sample rate</h3>
 
-<h3>5: Rational downsampler output rate</h3>
+This is the resulting sample rate after decimation and possible rational downsampler that is used by the spectrum and scope visualizations
 
-Use the wheels to adjust the sample rate that will be used in the rest of the signal processing in the channel. Left click on a digit sets the cursor position at this digit. Right click on a digit sets all digits on the right to zero. This effectively floors value at the digit position. The minimum value is 2000 S/s and the maximum value is the source plugin output sample rate. Wheels are moved with the mousewheel while pointing at the wheel or by selecting the wheel with the left mouse click and using the keyboard arrows. Pressing shift simultaneously moves digit by 5 and pressing control moves it by 2.
-
-<h3>6: Downsampler by a power of two</h3>
-
-This combo can select a further downsampling by a power of two. This downsampling applies on the signal coming either directly from the source plugin when the rational downsampler is disabled or from the output of the rational downsampler if it is engaged.
-
-<h3>7: Processing sample rate</h3>
-
-This is the resulting sample rate that will be used by the spectrum and scope visualizations
-
-<h3>8: signal selection</h3>
+<h3>6: signal selection</h3>
 
 Use this combo to select which (complex) signal to use as the display source:
 
@@ -86,6 +71,23 @@ Use this combo to select which (complex) signal to use as the display source:
   - ACorr: Auto-correlation of the main signal. It is a fixed 4096 point auto-correlation using FFT technique thus spanning the length of 4096 samples. The trace may show more samples in which case you will see the successive auto-correlation results.
 
 &#9758; Auto-correlation hint: because there is always a peak of magnitude at t=0 triggering on the magnitude will make sure the trace starts at t=0
+
+<h3>7: Locked loop</h3>
+
+Locks a PLL or FLL (depends on control 3) on the signal and mixes its NCO with the input signal. This is mostly useful for carrier recovery on PSK modulations (PLL is used). This effectively de-rotates the signal and symbol points (constellation) can be seen in XY mode with real part as X and imagiary part as Y.
+
+When the PLL is locked the icon lights up in green. The frequency shift from carrier appears in the tooltip. Locking indicator is pretty sharp with about +/- 100 Hz range. The FLL has no indicator.
+
+<h3>8: Locked loop mode</h3>
+
+Use this combo to control the locked loop type:
+
+  - 1: PLL with no phase modulation. Locks to CW carrier.
+  - 2: PLL for BPSK modulation (bi-phase). Locks to a BPSK transmission
+  - 4: PLL for QPSK modulation (quad-phase). Locks to a QPSK transmission
+  - 8: PLL for 8-PSK modulation (octo-phase). Locks to a 8-PSK transmission
+  - 16: PLL for 16-PSK modulation (16-phase). Locks to a 16-PSK transmission
+  - F: FLL. Actually a frequency follower. This effectively implements an AFC for FM modulations.
 
 <h3>9. Channel power</h3>
 
@@ -97,7 +99,7 @@ Use this toggle button to activate or de-activate the root raised cosine (RRC) f
 
 <h3>11. Tune RRC filter rolloff factor</h3>
 
-This button tunes the rolloff factor (a.k.a alpha) of the RRC filter in 0.01 steps between 0.1 and 0.7. Default is 0.35. 
+This button tunes the rolloff factor (a.k.a alpha) of the RRC filter in 0.01 steps between 0.1 and 0.7. Default is 0.35.
 
 <h3>12. Select lowpass filter cut-off frequency</h3>
 
@@ -105,27 +107,23 @@ In SSB mode this filter is a complex filter that can lowpass on either side of t
 
 In normal (DSB) mode this filter is a real filter that lowpass on both sides of the zero (center) frequency symmetrically. Therefore it acts as a bandpass filter centered on the zero frequency and therefore it is labeled as "BP". The value displayed in (9) is the full bandwidth of the filter.
 
-<h3>13. Lowpass filter cut-off frequency</h3>
+The bandwidth value display depends on SSB/DSB selection:
+  - in SSB mode this is the complex cut-off frequency and is negative for LSB.
+  - in normal (DSB) mode this is the full bandwidth of the real lowpass filter centered around zero frequency.
 
-In SSB mode this is the complex cut-off frequency and is negative for LSB.
-
-In normal (DSB) mode this is the full bandwidth of the real lowpass filter centered around zero frequency.
-
-<h3>14. SSB filtering</h3>
+<h3>13. SSB filtering</h3>
 
 When this toggle is engaged the signal is filtered either above (USB) or below (LSB) the channel center frequency. The sideband is selected according to the sign of the lowpass filter cut-off frequency (8): if positive the USB is selected else the LSB. In LSB mode the spectrum is reversed.
 
-When SSB is off the lowpass filter is actually a bandpass filter around the channel center frequency. 
+When SSB is off the lowpass filter is actually a bandpass filter around the channel center frequency.
 
-<h3>15. Select highpass filter cut-off frequency</h3>
+<h3>14. Select highpass filter cut-off frequency</h3>
 
 In SSB mode this controls the cut-off frequency of the complex highpass filter which is the filter closest to the zero frequency. This cut-off frequency is always at least 0.1 kHz in absolute value below the lowpass filter cut-off frequency (8).
 
 In normal (DSB) mode this filter is not active.
 
-<h3>16. Highpass filter cut-off frequency</h3>
-
-This is the cut-off frequency of the highpass filter in kHz. It is zero or negative in LSB mode.
+The value displayed is the cut-off frequency of the highpass filter in kHz. It is zero or negative in LSB mode.
 
 <h2>D. Scope global controls line</h2>
 
@@ -167,27 +165,33 @@ This button selects the display of all traces on the left side of the screen and
 
 Use this button to toggle points display (on) or line display (off) for the 2D XY display on the right. The points display may yield a more visible graph when the distinct artifact is an accumulation of points.
 
-<h3>7. Select trace intensity</h3>
+<h3>7. Rectangular or polar grid</h3>
+
+Use this button to switch between a rectangular and polar grid overlay on the XY display. Polar grid makes sense only if the X axis represents a phase from -1.0 to 1.0 in normalized value (radians divided by &pi;) i.e. zero centered between -&pi; and +&pi;. In practice it means Phase, DOA positive or DOA negative projections only with largest amplitude setting and zero offset. The grid represents the unit circle and axes for angles in degrees: -180, -150, -135, -120, -90, -60, -45, -30, 0, 30, 45, 60, 90, 135, 150, (180) as illustrated below:
+
+![Channel Analyzer NG plugin scope1 controls](../../../doc/img/ChAnalyzerNG_plugin_polar_grid.png)
+
+<h3>8. Select trace intensity</h3>
 
 This button lets you adjust the traces intensity. The value in percent of the maximum intensity appears as a tooltip
 
-<h3>8. Select grid intensity</h3>
+<h3>9. Select grid intensity</h3>
 
 This button lets you adjust the grid intensity. The value in percent of the maximum intensity appears as a tooltip
 
-<h3>9. Displayed trace length</h3>
+<h3>10. Displayed trace length</h3>
 
-This slider lets you adjust the length of the traces on display. Each step further divides the length of the full trace controlled by (10). The duration of the full length shown on display appears on the left of the slider and the corresponding number of samples appears as a tooltip. 
+This slider lets you adjust the length of the traces on display. Each step further divides the length of the full trace controlled by (10). The duration of the full length shown on display appears on the left of the slider and the corresponding number of samples appears as a tooltip.
 
-<h3>10. Trace offset</h3>
+<h3>11. Trace offset</h3>
 
-This slider lets you move the start of traces on display. Each step moves the trace by an amount of time corresponding to 1/100 of the length of the full trace controlled by (10). The time offset from the start of the traces appears on the left of the slider and the corresponding number of samples appears as a tooltip. 
+This slider lets you move the start of traces on display. Each step moves the trace by an amount of time corresponding to 1/100 of the length of the full trace controlled by (10). The time offset from the start of the traces appears on the left of the slider and the corresponding number of samples appears as a tooltip.
 
-<h3>11. Trace length</h3>
+<h3>12. Trace length</h3>
 
 This slider lets you control the full length of the trace. Each step increases the corresponding amount of samples by 4800 samples with a minimum of 4800 samples and a maximum of 20*4800 = 96000 samples. The duration of a full trace appears on the left of the slider and he corresponding number of samples appears as a tooltip.
 
-<h3>12. Trace sample rate</h3>
+<h3>13. Trace sample rate</h3>
 
 This is the sample rate used by the scope and corresponds to the final sample rate after the whole decimation chain. It should be the same amount as the one displayed on the plugin control (C.6)
 
@@ -215,64 +219,66 @@ The bottom button with the down arrow lets you move the currently selected trace
 
 To construct a trace which represents real values the incoming complex signal must be "projected" on the real axis. This combo lets you select the projection scheme:
 
-  - Real: take the real part
-  - Imag: take the imaginary part
-  - Mag: calculate magnitude in linear representation. This is just the module of the complex sample
-  - MagSq: calculate power in linear representation. This is the squared module of the complex sample
-  - MagDB: calculate power in log representation as 10*log10(x) or decibel (dB) representation. This is the squared module of the complex sample expressed in decibels
-  - Phi: instantaneous phase. This is the argument of the complex sample.
-  - dPhi: instantaneous derivative of the phase. This is the difference of arguments between successive samples thus represents the instantaneous frequency.
-  - BPSK: maps -&#960; to &#960; phase into two &#960; wide sectors centered on 0 and &#960; on the -1 to +1 range (sector is 1.0 wide): 
-    - 0 &rarr; 0.5, 
+  - **Real**: take the real part
+  - **Imag**: take the imaginary part
+  - **Mag**: calculate magnitude in linear representation. This is just the module of the complex sample
+  - **MagSq**: calculate power in linear representation. This is the squared module of the complex sample
+  - **MagDB**: calculate power in log representation as 10*log10(x) or decibel (dB) representation. This is the squared module of the complex sample expressed in decibels
+  - **Phi**: instantaneous phase. This is the argument of the complex sample.
+  - **DOAP**: direction of arrival on the positive side. Assumes the phase of signal is the phase difference between two sources at half wavelength distance. Axis of reference (towards angle zero) is assumed to be the half line between reference source (1) and probe source (2). Assumes the angle is positive (left side of axis)
+  - **DOAN**: direction of arrival on the negative side. Assumes the phase of signal is the phase difference between two sources at half wavelength distance. Axis of reference (towards angle zero) is assumed to be the half line between reference source (1) and probe source (2). Assumes the angle is negative (right side of axis)
+  - **dPhi**: instantaneous derivative of the phase. This is the difference of arguments between successive samples thus represents the instantaneous frequency.
+  - **BPSK**: maps -&#960; to &#960; phase into two &#960; wide sectors centered on 0 and &#960; on the -1 to +1 range (sector is 1.0 wide):
+    - 0 &rarr; 0.5,
     - &#960; &rarr; -0.5
-  - QPSK: maps -&#960; to &#960; phase into four &#960;/2 wide sectors centered on 0, &#960;/2, &#960;, -&#960;/2 on the -1 to +1 range (sector is 0.5 wide): 
+  - **QPSK**: maps -&#960; to &#960; phase into four &#960;/2 wide sectors centered on 0, &#960;/2, &#960;, -&#960;/2 on the -1 to +1 range (sector is 0.5 wide):
     - 0 &rarr; 0.25
     - &#960;/2 &rarr; 0.75
     - &#960; &rarr; -0.75
-    - -&#960;/2 &rarr; -0.25 
-  - 8PSK: maps -&#960; to &#960; phase into eight &#960;/4 wide sectors centered on 0, &#960;/4, &#960;/2, 3&#960;/4, &#960;, -3&#960;/4, -&#960;/2, -&#960;/4 on the -1 to +1 range (sector is 0.25 wide): 
-    - 0 &rarr; 0.125 
-    - &#960;/4 &rarr; 0.375 
-    - &#960;/2 &rarr; 0.625 
-    - 3&#960;/4 &rarr; 0.875 
+    - -&#960;/2 &rarr; -0.25
+  - **8PSK**: maps -&#960; to &#960; phase into eight &#960;/4 wide sectors centered on 0, &#960;/4, &#960;/2, 3&#960;/4, &#960;, -3&#960;/4, -&#960;/2, -&#960;/4 on the -1 to +1 range (sector is 0.25 wide):
+    - 0 &rarr; 0.125
+    - &#960;/4 &rarr; 0.375
+    - &#960;/2 &rarr; 0.625
+    - 3&#960;/4 &rarr; 0.875
     - &#960; &rarr; -0.875
-    - -3&#960;/4 &rarr; -0.625 
-    - -&#960;/2 &rarr; -0.375 
-    - -&#960;/4 &rarr; -0.125 
-  - 16PSK: maps -&#960; to &#960; phase into sixteen &#960;/8 wide sectors centered on 0, &#960;/8, &#960;/4, 3&#960;/8, &#960;/2, 5&#960;/8, 3&#960;/4, 7&#960;/8, &#960;, -7&#960;/8, -3&#960;/4, -5&#960;/8, -&#960;/2, -3&#960;/8, -&#960;/4, -&#960;/8 on the -1 to +1 range (sector is 0.125 wide): 
+    - -3&#960;/4 &rarr; -0.625
+    - -&#960;/2 &rarr; -0.375
+    - -&#960;/4 &rarr; -0.125
+  - **16PSK**: maps -&#960; to &#960; phase into sixteen &#960;/8 wide sectors centered on 0, &#960;/8, &#960;/4, 3&#960;/8, &#960;/2, 5&#960;/8, 3&#960;/4, 7&#960;/8, &#960;, -7&#960;/8, -3&#960;/4, -5&#960;/8, -&#960;/2, -3&#960;/8, -&#960;/4, -&#960;/8 on the -1 to +1 range (sector is 0.125 wide):
     - 0 &rarr; 0.0625
-    - &#960;/8 &rarr; 0.1875 
-    - &#960;/4 &rarr; 0.3125 
-    - 3&#960;/8 &rarr; 0.4375 
+    - &#960;/8 &rarr; 0.1875
+    - &#960;/4 &rarr; 0.3125
+    - 3&#960;/8 &rarr; 0.4375
     - &#960;/2 &rarr; 0.5625
-    - 5&#960;/8 &rarr; 0.6875 
-    - 3&#960;/4 &rarr; 0.8125 
+    - 5&#960;/8 &rarr; 0.6875
+    - 3&#960;/4 &rarr; 0.8125
     - 7&#960;/8 &rarr; 0.9375
-    - &#960; &rarr; -0.9375  
+    - &#960; &rarr; -0.9375
     - -7&#960;/8 &rarr; -0.8125
-    - -3&#960;/4 &rarr; -0.6875 
-    - -5&#960;/8 &rarr; -0.5625 
+    - -3&#960;/4 &rarr; -0.6875
+    - -5&#960;/8 &rarr; -0.5625
     - -&#960;/2 &rarr; -0.4375
-    - -3&#960;/8 &rarr; -0.3125 
-    - -&#960;/4 &rarr; -0.1875 
-    - -&#960;/8 &rarr; -0.0625 
-  
+    - -3&#960;/8 &rarr; -0.3125
+    - -&#960;/4 &rarr; -0.1875
+    - -&#960;/8 &rarr; -0.0625
+
 **Note1**: example of QPSK projection on a synchronized Tetra signal:
 
 ![Channel Analyzer NG plugin tetra example](../../../doc/img/ChAnalyzerNG_plugin_tetra.png)
 
-The signal is synchronized with the PLL in 4 phase mode (locker icon is green). 
- - A Tetra signal is QPSK modulated at 18 kSym/s therefore the sample rate is set at 90 kS/s thus we have an integer number of samples per symbol (5 samples per symbol). See green square. 
+The signal is synchronized with the PLL in 4 phase mode (locker icon is green).
+ - A Tetra signal is QPSK modulated at 18 kSym/s therefore the sample rate is set at 90 kS/s thus we have an integer number of samples per symbol (5 samples per symbol). See green square.
  - We have set two traces (X and Y1) with QPSK projection. The Y1 trace is delayed by two symbols (10 samples) which makes a 111.11 &#956;s delay. See blue square
  - In XY mode on the XY display (right) we can see an accumulation of points around the 16 possible symbol transitions. In two places the same symbol is repeated several times which results in a stronger accumulation. One is with the symbol at 0 (see red circle and square) and the other is with the symbol at &#960; (see yellow circle and square).
  - On the left panel of the XY mode display we can see that the 4 possible symbols mark 4 vertical stronger areas centered on 0.25, 0.75, -0.25 and -0.75.
 
 **Note2**: in the MagDB mode when the trace is selected (1) the display overlay on the top right of the trace shows 3 figures. From left to right: peak power in dB, average power in dB and peak to average difference in dB.
-  
+
 ![Channel Analyzer NG plugin scope1 controls](../../../doc/img/ChAnalyzerNG_plugin_overlay_dB.png)
 
 **Note3**: in the MagSq mode when the trace is selected (1) the display overlay on the top right of the trace shows 2 figures in scientific notation. From left to right: peak power and average power.
-  
+
 ![Channel Analyzer NG plugin scope2 controls](../../../doc/img/ChAnalyzerNG_plugin_overlay_lin.png)
 
 <h3>5. Source select</h3>
@@ -290,7 +296,7 @@ This pair of sliders let you offset the trace vertically. The offset value from 
   - central zero value for Real, Imag, Phi and dPhi projections
   - bottom zero value for MagLin projection
   - bottom -200 dB value for MagDB projection
-  
+
 The top slider is a coarse adjustment. Each step moves the trace by an amount that depends on the projection type:
 
   - Real, Imag: 0.01
@@ -329,7 +335,7 @@ While in memory mode (see E.13 next) use this button to save the bank of traces 
 
 <h3>12. Load traces into memory</h3>
 
-While in memory mode (see E.13 next) use this button to load traces previously saved to file using the (E.11) button into the traces memory bank (50 traces). A file dialog will open to let you select the file. It will look for files with `.trcm` extension by default. 
+While in memory mode (see E.13 next) use this button to load traces previously saved to file using the (E.11) button into the traces memory bank (50 traces). A file dialog will open to let you select the file. It will look for files with `.trcm` extension by default.
 
 <h3>13. Memory select</h3>
 
@@ -340,7 +346,7 @@ It is the complex signal that is memorized actually so when a trace in memory is
 While in memory trace the save (E.11) and load (E.12) traces to file buttons can be used.
 
 <h2>F. Trigger control line</h2>
- 
+
 ![Channel Analyzer NG plugin scope1 controls](../../../doc/img/ChAnalyzerNG_plugin_scope3.png)
 
 <h3>1. Select trigger</h3>
@@ -398,7 +404,7 @@ A value above 1 helps eliminating false triggers when small spikes appear on the
 
 <h3>10. Trigger level adjustment</h3>
 
-This pair of sliders let you adjust the trigger level, The level appears on the left of the sliders. 
+This pair of sliders let you adjust the trigger level, The level appears on the left of the sliders.
 
 The top slider is a coarse adjustment. Each step moves the trigger level by an amount that depends on the projection type:
 
@@ -407,7 +413,7 @@ The top slider is a coarse adjustment. Each step moves the trigger level by an a
   - MagSq: 0.01
   - MagDB: 1 dB
   - Phi, dPhi: 0.01
-  
+
 The bottom slider is a fine adjustment. Each step moves the trigger level by an amount that depends on the projection type:
 
   - Real, Imag: 20.0E-6
@@ -415,7 +421,7 @@ The bottom slider is a fine adjustment. Each step moves the trigger level by an 
   - MagSq: 20.0sE-6
   - MagDB: 0.01 dB
   - Phi, dPhi: 20.0E-6
-  
+
 <h3>11: Trigger delay</h3>
 
 The actual trigger top can be moved forward by a number of samples. This pair of slider lets you adjust this delay. The delay in time units appears at the left of the sliders and the amount of samples as a tooltip
@@ -438,4 +444,4 @@ This button toggles a one shot trigger. When the (final) trigger is raised only 
 
 <h3>15. Freerun</h3>
 
-When active the triggers are disabled and traces are processed continuously. This is the default at plugin start time. 
+When active the triggers are disabled and traces are processed continuously. This is the default at plugin start time.

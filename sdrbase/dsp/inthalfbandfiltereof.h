@@ -9,6 +9,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -106,6 +107,38 @@ public:
         doInterpolateFIR(x2, y2);
     }
 
+    void myInterpolateInf(float *x1, float *y1, float *x2, float *y2, float *x3, float *y3, float *x4, float *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = *y1;
+        *y1 = -x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = -*y3;
+        *y3 = x;
+    }
+
+    void myInterpolateSup(float *x1, float *y1, float *x2, float *y2, float *x3, float *y3, float *x4, float *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = -*y1;
+        *y1 = x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = *y3;
+        *y3 = -x;
+    }
+
 protected:
     float m_even[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder];    // double buffer technique
     float m_odd[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder];     // double buffer technique
@@ -143,15 +176,6 @@ protected:
         float iAcc = 0;
         float qAcc = 0;
 
-//#if defined(USE_SSE4_1) && !defined(NO_DSP_SIMD)
-//        IntHalfbandFilterEO1Intrisics<HBFilterOrder>::work(
-//                m_ptr,
-//                m_even,
-//                m_odd,
-//                iAcc,
-//                qAcc
-//        );
-//#else
         int a = m_ptr/2 + m_size; // tip pointer
         int b = m_ptr/2 + 1; // tail pointer
 
@@ -171,7 +195,7 @@ protected:
             a -= 1;
             b += 1;
         }
-//#endif
+
         if ((m_ptr % 2) == 0)
         {
             iAcc += m_odd[0][m_ptr/2 + m_size/2] * 0.5f;

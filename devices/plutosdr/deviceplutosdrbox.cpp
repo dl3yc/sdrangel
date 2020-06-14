@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -60,7 +61,6 @@ DevicePlutoSDRBox::DevicePlutoSDRBox(const std::string& uri) :
 
     if (m_valid) {
         getXO();
-        setTracking();
 //        int nb_channels = iio_device_get_channels_count(m_devRx);
 //        for (int i = 0; i < nb_channels; i++) {
 //            iio_channel_disable(iio_device_get_channel(m_devRx, i));
@@ -657,7 +657,7 @@ void DevicePlutoSDRBox::getXO()
     get_param(DEVICE_PHY, "xo_correction", valueStr);
     try
     {
-        m_xoInitial = boost::lexical_cast<int64_t>(valueStr);
+        m_xoInitial = boost::lexical_cast<quint64>(valueStr);
         qDebug("DevicePlutoSDRBox::getXO: %ld", m_xoInitial);
     }
     catch (const boost::bad_lexical_cast &e)
@@ -826,18 +826,3 @@ bool DevicePlutoSDRBox::getRateGovernors(std::string& rateGovernors)
 {
     return get_param(DEVICE_PHY, "trx_rate_governor", rateGovernors);
 }
-
-void DevicePlutoSDRBox::setTracking()
-{
-    // in_voltage_quadrature_tracking_en
-    char buff[100];
-    std::vector<std::string> params;
-    snprintf(buff, sizeof(buff), "in_voltage_quadrature_tracking_en=1");
-    params.push_back(std::string(buff));
-    snprintf(buff, sizeof(buff), "in_voltage_bb_dc_offset_tracking_en=1");
-    params.push_back(std::string(buff));
-    snprintf(buff, sizeof(buff), "in_voltage_rf_dc_offset_tracking_en=1");
-    params.push_back(std::string(buff));
-    set_params(DEVICE_PHY, params);
-}
-

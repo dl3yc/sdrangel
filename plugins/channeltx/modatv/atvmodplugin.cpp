@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,11 +22,13 @@
 #include "atvmodgui.h"
 #endif
 #include "atvmod.h"
+#include "atvmodwebapiadapter.h"
 #include "atvmodplugin.h"
 
 const PluginDescriptor ATVModPlugin::m_pluginDescriptor = {
+    ATVMod::m_channelId,
     QString("ATV Modulator"),
-    QString("4.3.2"),
+    QString("4.12.3"),
     QString("(c) Edouard Griffiths, F4EXB"),
     QString("https://github.com/f4exb/sdrangel"),
     true,
@@ -53,27 +56,29 @@ void ATVModPlugin::initPlugin(PluginAPI* pluginAPI)
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* ATVModPlugin::createTxChannelGUI(
-        DeviceUISet *deviceUISet __attribute__((unused)),
-        BasebandSampleSource *txChannel __attribute__((unused)))
+        DeviceUISet *deviceUISet,
+        BasebandSampleSource *txChannel) const
 {
     return 0;
 }
 #else
-PluginInstanceGUI* ATVModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel)
+PluginInstanceGUI* ATVModPlugin::createTxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSource *txChannel) const
 {
     return ATVModGUI::create(m_pluginAPI, deviceUISet, txChannel);
 }
 #endif
 
-BasebandSampleSource* ATVModPlugin::createTxChannelBS(DeviceSinkAPI *deviceAPI)
+BasebandSampleSource* ATVModPlugin::createTxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new ATVMod(deviceAPI);
 }
 
-ChannelSourceAPI* ATVModPlugin::createTxChannelCS(DeviceSinkAPI *deviceAPI)
+ChannelAPI* ATVModPlugin::createTxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new ATVMod(deviceAPI);
 }
 
-
-
+ChannelWebAPIAdapter* ATVModPlugin::createChannelWebAPIAdapter() const
+{
+	return new ATVModWebAPIAdapter();
+}

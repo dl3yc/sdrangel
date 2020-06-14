@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -28,7 +29,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSinkAPI;
+class DeviceAPI;
 class LimeSDROutputThread;
 struct DeviceLimeSDRParams;
 
@@ -183,7 +184,7 @@ public:
         { }
     };
 
-    LimeSDROutput(DeviceSinkAPI *deviceAPI);
+    LimeSDROutput(DeviceAPI *deviceAPI);
     virtual ~LimeSDROutput();
     virtual void destroy();
 
@@ -197,6 +198,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
     virtual const QString& getDeviceDescription() const;
     virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
     virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency);
 
@@ -225,14 +227,24 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const LimeSDROutputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            LimeSDROutputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     std::size_t getChannelIndex();
     void getLORange(float& minF, float& maxF) const;
     void getSRRange(float& minF, float& maxF) const;
     void getLPRange(float& minF, float& maxF) const;
     uint32_t getHWLog2Interp() const;
+    DeviceLimeSDRParams::LimeType getLimeType() const;
 
 private:
-    DeviceSinkAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
     QMutex m_mutex;
     LimeSDROutputSettings m_settings;
     LimeSDROutputThread* m_limeSDROutputThread;
@@ -253,7 +265,6 @@ private:
     void suspendTxBuddies();
     void resumeTxBuddies();
     bool applySettings(const LimeSDROutputSettings& settings, bool force = false, bool forceNCOFrequency = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const LimeSDROutputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const LimeSDROutputSettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

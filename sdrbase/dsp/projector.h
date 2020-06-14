@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -29,6 +30,8 @@ public:
         ProjectionMagSq,    //!< Calculate linear squared magnitude or power
         ProjectionMagDB,    //!< Calculate logarithmic (dB) of squared magnitude
         ProjectionPhase,    //!< Calculate phase
+        ProjectionDOAP,     //!< Calculate ambiguous DOA from phase as phase difference (assuming positive)
+        ProjectionDOAN,     //!< Calculate ambiguous DOA from phase as phase difference (assuming negative)
         ProjectionDPhase,   //!< Calculate phase derivative i.e. instantaneous frequency scaled to sample rate
         ProjectionBPSK,     //!< Phase comparator BPSK evaluation
         ProjectionQPSK,     //!< Phase comparator QPSK evaluation

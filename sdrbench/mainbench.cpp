@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,6 +19,8 @@
 
 #include <QDebug>
 #include <QElapsedTimer>
+
+#include "ambe/ambeengine.h"
 
 #include "mainbench.h"
 
@@ -59,6 +62,8 @@ void MainBench::run()
         testDecimateFI();
     } else if (m_parser.getTestType() == ParserBench::TestDecimatorsFF) {
         testDecimateFF();
+    } else if (m_parser.getTestType() == ParserBench::TestAMBE) {
+        testAMBE();
     } else {
         qDebug() << "MainBench::run: unknown test type: " << m_parser.getTestType();
     }
@@ -188,6 +193,18 @@ void MainBench::testDecimateFF()
 
     qDebug() << "MainBench::testDecimateFF: cleanup test data";
     delete[] buf;
+}
+
+void MainBench::testAMBE()
+{
+    qDebug() << "MainBench::testAMBE";
+    AMBEEngine ambeEngine;
+    std::vector<QString> ambeDevices;
+    ambeEngine.scan(ambeDevices);
+
+    for (std::vector<QString>::const_iterator it = ambeDevices.begin(); it != ambeDevices.end(); ++it) {
+        qDebug("MainBench::testAMBE: detected AMBE device %s", qPrintable(*it));
+    }
 }
 
 void MainBench::decimateII(const qint16* buf, int len)

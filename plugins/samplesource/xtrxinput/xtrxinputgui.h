@@ -1,10 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2017 Edouard Griffiths, F4EXB                                   //
+// Copyright (C) 2017, 2018 Edouard Griffiths, F4EXB                             //
 // Copyright (C) 2017 Sergey Kostanbaev, Fairwaves Inc.                          //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -57,6 +58,7 @@ private:
     DeviceUISet* m_deviceUISet;
     XTRXInput* m_XTRXInput; //!< Same object as above but gives easy access to XTRXInput methods and attributes that are used intensively
     XTRXInputSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
     QTimer m_updateTimer;
     QTimer m_statusTimer;
     int m_sampleRate;
@@ -69,6 +71,7 @@ private:
     MessageQueue m_inputMessageQueue;
 
     void displaySettings();
+    void displaySampleRate();
     void setNCODisplay();
     void setCenterFrequencyDisplay();
     void setCenterFrequencySetting(uint64_t kHzValue);
@@ -98,10 +101,12 @@ private slots:
     void on_antenna_currentIndexChanged(int index);
     void on_extClock_clicked();
     void on_pwrmode_currentIndexChanged(int index);
+    void on_sampleRateMode_toggled(bool checked);
 
     void updateHardware();
     void updateStatus();
     void openDeviceSettingsDialog(const QPoint& p);
+    void openFileRecordDialog(const QPoint& p);
 };
 
 #endif /* PLUGINS_SAMPLESOURCE_XTRXINPUT_XTRXINPUTGUI_H_ */

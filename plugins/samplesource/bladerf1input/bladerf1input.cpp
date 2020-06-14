@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,13 +24,16 @@
 
 #include "SWGDeviceSettings.h"
 #include "SWGDeviceState.h"
+#include "SWGDeviceActions.h"
+#include "SWGBladeRF1InputActions.h"
 
 #include "util/simpleserializer.h"
 #include "dsp/dspcommands.h"
+#include "dsp/dspdevicesourceengine.h"
+#include "dsp/dspdevicesinkengine.h"
 #include "dsp/dspengine.h"
 #include "dsp/filerecord.h"
-#include "device/devicesourceapi.h"
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 
 #include "bladerf1input.h"
 #include "bladerf1inputthread.h"
@@ -38,7 +42,7 @@ MESSAGE_CLASS_DEFINITION(Bladerf1Input::MsgConfigureBladerf1, Message)
 MESSAGE_CLASS_DEFINITION(Bladerf1Input::MsgStartStop, Message)
 MESSAGE_CLASS_DEFINITION(Bladerf1Input::MsgFileRecord, Message)
 
-Bladerf1Input::Bladerf1Input(DeviceSourceAPI *deviceAPI) :
+Bladerf1Input::Bladerf1Input(DeviceAPI *deviceAPI) :
     m_deviceAPI(deviceAPI),
 	m_settings(),
 	m_dev(0),
@@ -48,7 +52,8 @@ Bladerf1Input::Bladerf1Input(DeviceSourceAPI *deviceAPI) :
 {
     openDevice();
     m_fileSink = new FileRecord(QString("test_%1.sdriq").arg(m_deviceAPI->getDeviceUID()));
-    m_deviceAPI->addSink(m_fileSink);
+    m_deviceAPI->setNbSourceStreams(1);
+    m_deviceAPI->addAncillarySink(m_fileSink);
 
     m_deviceAPI->setBuddySharedPtr(&m_sharedParams);
 
@@ -65,7 +70,7 @@ Bladerf1Input::~Bladerf1Input()
         stop();
     }
 
-    m_deviceAPI->removeSink(m_fileSink);
+    m_deviceAPI->removeAncillarySink(m_fileSink);
     delete m_fileSink;
     closeDevice();
     m_deviceAPI->setBuddySharedPtr(0);
@@ -93,7 +98,7 @@ bool Bladerf1Input::openDevice()
 
     if (m_deviceAPI->getSinkBuddies().size() > 0)
     {
-        DeviceSinkAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
+        DeviceAPI *sinkBuddy = m_deviceAPI->getSinkBuddies()[0];
         DeviceBladeRF1Params *buddySharedParams = (DeviceBladeRF1Params *) sinkBuddy->getBuddySharedPtr();
 
         if (buddySharedParams == 0)
@@ -113,9 +118,9 @@ bool Bladerf1Input::openDevice()
     }
     else
     {
-        if (!DeviceBladeRF1::open_bladerf(&m_dev, qPrintable(m_deviceAPI->getSampleSourceSerial())))
+        if (!DeviceBladeRF1::open_bladerf(&m_dev, qPrintable(m_deviceAPI->getSamplingDeviceSerial())))
         {
-            qCritical("BladerfInput::start: could not open BladeRF %s", qPrintable(m_deviceAPI->getSampleSourceSerial()));
+            qCritical("BladerfInput::start: could not open BladeRF %s", qPrintable(m_deviceAPI->getSamplingDeviceSerial()));
             return false;
         }
 
@@ -312,14 +317,14 @@ bool Bladerf1Input::handleMessage(const Message& message)
 
         if (cmd.getStartStop())
         {
-            if (m_deviceAPI->initAcquisition())
+            if (m_deviceAPI->initDeviceEngine())
             {
-                m_deviceAPI->startAcquisition();
+                m_deviceAPI->startDeviceEngine();
             }
         }
         else
         {
-            m_deviceAPI->stopAcquisition();
+            m_deviceAPI->stopDeviceEngine();
         }
 
         if (m_settings.m_useReverseAPI) {
@@ -407,7 +412,7 @@ bool Bladerf1Input::applySettings(const BladeRF1InputSettings& settings, bool fo
 
 		    if (m_deviceAPI->getSinkBuddies().size() > 0)
 		    {
-		        DeviceSinkAPI *buddy = m_deviceAPI->getSinkBuddies()[0];
+		        DeviceAPI *buddy = m_deviceAPI->getSinkBuddies()[0];
 
 		        if (buddy->getDeviceSinkEngine()->state() == DSPDeviceSinkEngine::StRunning) { // Tx side running
 		            changeSettings = false;
@@ -542,7 +547,9 @@ bool Bladerf1Input::applySettings(const BladeRF1InputSettings& settings, bool fo
                 0,
                 settings.m_log2Decim,
                 (DeviceSampleSource::fcPos_t) settings.m_fcPos,
-                settings.m_devSampleRate);
+                settings.m_devSampleRate,
+                DeviceSampleSource::FrequencyShiftScheme::FSHIFT_STD,
+                false);
 
         forwardChange = true;
 
@@ -662,7 +669,26 @@ int Bladerf1Input::webapiSettingsPutPatch(
 {
     (void) errorMessage;
     BladeRF1InputSettings settings = m_settings;
+    webapiUpdateDeviceSettings(settings, deviceSettingsKeys, response);
 
+    MsgConfigureBladerf1 *msg = MsgConfigureBladerf1::create(settings, force);
+    m_inputMessageQueue.push(msg);
+
+    if (m_guiMessageQueue) // forward to GUI if any
+    {
+        MsgConfigureBladerf1 *msgToGUI = MsgConfigureBladerf1::create(settings, force);
+        m_guiMessageQueue->push(msgToGUI);
+    }
+
+    webapiFormatDeviceSettings(response, settings);
+    return 200;
+}
+
+void Bladerf1Input::webapiUpdateDeviceSettings(
+        BladeRF1InputSettings& settings,
+        const QStringList& deviceSettingsKeys,
+        SWGSDRangel::SWGDeviceSettings& response)
+{
     if (deviceSettingsKeys.contains("centerFrequency")) {
         settings.m_centerFrequency = response.getBladeRf1InputSettings()->getCenterFrequency();
     }
@@ -717,18 +743,6 @@ int Bladerf1Input::webapiSettingsPutPatch(
     if (deviceSettingsKeys.contains("reverseAPIDeviceIndex")) {
         settings.m_reverseAPIDeviceIndex = response.getBladeRf1InputSettings()->getReverseApiDeviceIndex();
     }
-
-    MsgConfigureBladerf1 *msg = MsgConfigureBladerf1::create(settings, force);
-    m_inputMessageQueue.push(msg);
-
-    if (m_guiMessageQueue) // forward to GUI if any
-    {
-        MsgConfigureBladerf1 *msgToGUI = MsgConfigureBladerf1::create(settings, force);
-        m_guiMessageQueue->push(msgToGUI);
-    }
-
-    webapiFormatDeviceSettings(response, settings);
-    return 200;
 }
 
 int Bladerf1Input::webapiRunGet(
@@ -759,10 +773,42 @@ int Bladerf1Input::webapiRun(
     return 200;
 }
 
+int Bladerf1Input::webapiActionsPost(
+        const QStringList& deviceActionsKeys,
+        SWGSDRangel::SWGDeviceActions& query,
+        QString& errorMessage)
+{
+    SWGSDRangel::SWGBladeRF1InputActions *swgBladeRF1InputActions = query.getBladeRf1InputActions();
+
+    if (swgBladeRF1InputActions)
+    {
+        if (deviceActionsKeys.contains("record"))
+        {
+            bool record = swgBladeRF1InputActions->getRecord() != 0;
+            MsgFileRecord *msg = MsgFileRecord::create(record);
+            getInputMessageQueue()->push(msg);
+
+            if (getMessageQueueToGUI())
+            {
+                MsgFileRecord *msgToGUI = MsgFileRecord::create(record);
+                getMessageQueueToGUI()->push(msgToGUI);
+            }
+        }
+
+        return 202;
+    }
+    else
+    {
+        errorMessage = "Missing BladeRF1InputActions in query";
+        return 400;
+    }
+}
+
 void Bladerf1Input::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const BladeRF1InputSettings& settings, bool force)
 {
     SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
-    swgDeviceSettings->setTx(0);
+    swgDeviceSettings->setDirection(0); // single Rx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
     swgDeviceSettings->setDeviceHwType(new QString("BladeRF1"));
     swgDeviceSettings->setBladeRf1InputSettings(new SWGSDRangel::SWGBladeRF1InputSettings());
     SWGSDRangel::SWGBladeRF1InputSettings *swgBladeRF1Settings = swgDeviceSettings->getBladeRf1InputSettings();
@@ -819,30 +865,46 @@ void Bladerf1Input::webapiReverseSendSettings(QList<QString>& deviceSettingsKeys
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
     m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QBuffer *buffer=new QBuffer();
+    QBuffer *buffer = new QBuffer();
     buffer->open((QBuffer::ReadWrite));
     buffer->write(swgDeviceSettings->asJson().toUtf8());
     buffer->seek(0);
 
     // Always use PATCH to avoid passing reverse API settings
-    m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    QNetworkReply *reply = m_networkManager->sendCustomRequest(m_networkRequest, "PATCH", buffer);
+    buffer->setParent(reply);
 
     delete swgDeviceSettings;
 }
 
 void Bladerf1Input::webapiReverseSendStartStop(bool start)
 {
+    SWGSDRangel::SWGDeviceSettings *swgDeviceSettings = new SWGSDRangel::SWGDeviceSettings();
+    swgDeviceSettings->setDirection(0); // single Rx
+    swgDeviceSettings->setOriginatorIndex(m_deviceAPI->getDeviceSetIndex());
+    swgDeviceSettings->setDeviceHwType(new QString("BladeRF1"));
+
     QString deviceSettingsURL = QString("http://%1:%2/sdrangel/deviceset/%3/device/run")
             .arg(m_settings.m_reverseAPIAddress)
             .arg(m_settings.m_reverseAPIPort)
             .arg(m_settings.m_reverseAPIDeviceIndex);
     m_networkRequest.setUrl(QUrl(deviceSettingsURL));
+    m_networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QBuffer *buffer = new QBuffer();
+    buffer->open((QBuffer::ReadWrite));
+    buffer->write(swgDeviceSettings->asJson().toUtf8());
+    buffer->seek(0);
+    QNetworkReply *reply;
 
     if (start) {
-        m_networkManager->sendCustomRequest(m_networkRequest, "POST");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "POST", buffer);
     } else {
-        m_networkManager->sendCustomRequest(m_networkRequest, "DELETE");
+        reply = m_networkManager->sendCustomRequest(m_networkRequest, "DELETE", buffer);
     }
+
+    buffer->setParent(reply);
+    delete swgDeviceSettings;
 }
 
 void Bladerf1Input::networkManagerFinished(QNetworkReply *reply)
@@ -855,10 +917,13 @@ void Bladerf1Input::networkManagerFinished(QNetworkReply *reply)
                 << " error(" << (int) replyError
                 << "): " << replyError
                 << ": " << reply->errorString();
-        return;
+    }
+    else
+    {
+        QString answer = reply->readAll();
+        answer.chop(1); // remove last \n
+        qDebug("Bladerf1Input::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
     }
 
-    QString answer = reply->readAll();
-    answer.chop(1); // remove last \n
-    qDebug("Bladerf1Input::networkManagerFinished: reply:\n%s", answer.toStdString().c_str());
+    reply->deleteLater();
 }

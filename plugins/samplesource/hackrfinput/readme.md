@@ -4,12 +4,6 @@
 
 This input sample source plugin gets its samples from a [HackRF device](https://greatscottgadgets.com/hackrf/).
 
-<h2>Build</h2>
-
-The plugin will be built only if the [HackRF host library](https://github.com/mossmann/hackrf) is installed in your system. If you build it from source and install it in a custom location say: `/opt/install/libhackrf` you will have to add `-DHACKRF_DIR=/opt/install/libhackrf` to the cmake command line.
-
-The HackRF Host library is also provided by many Linux distributions and is built in the SDRangel binary releases.
-
 <h2>Interface</h2>
 
 ![HackRF input plugin GUI](../../../doc/img/HackRFInput_plugin.png)
@@ -24,23 +18,26 @@ This is the center frequency of reception in kHz.
 
 <h4>1.2: Start/Stop</h4>
 
-Device start / stop button. 
+Device start / stop button.
 
   - Blue triangle icon: device is ready and can be started
   - Green square icon: device is running and can be stopped
   - Red square icon: an error occurred. In the case the device was accidentally disconnected you may click on the icon, plug back in and start again.
-  
+
 If you have the Tx open in another tab and it is running then it will be stopped automatically before the Rx starts. In a similar manner the Rx will be stopped before the Tx is started from the Tx tab.
 
 The settings on Rx or Tx tab are reapplied on start so these settings can be considered independent.
 
 <h4>1.3: Record</h4>
 
-Record baseband I/Q stream toggle button
+  - Left click: record baseband I/Q stream toggle button
+  - Right click: choose record file
 
-<h4>1.4: Baseband sample rate</h4>
+<h4>1.4: Stream sample rate</h4>
 
-Baseband I/Q sample rate in kS/s. This is the device sample rate (4) divided by the decimation factor (6). 
+In device to host sample rate input mode (6A) this is the baseband I/Q sample rate in kS/s. This is the device to host sample rate (6) divided by the decimation factor (7).
+
+In baseband sample rate input mode (6A) this is the device to host sample rate in kS/s. This is the baseband sample rate (6) multiplied by the decimation factor (7)
 
 <h3>2: Local Oscillator correction</h3>
 
@@ -53,25 +50,26 @@ These buttons control the local DSP auto correction options:
   - **DC**: auto remove DC component
   - **IQ**: auto make I/Q balance. The DC correction must be enabled for this to be effective.
 
-<h3>3A: Link Tx frequency</h3>
-
-Use this button to toggle the device Tx frequency link.
-
-When active (button lit) and a tab is opened for the Tx part of the same device this option will activate the link of the Tx frequency to the Rx frequency. Thus when changing the Rx frequency the Tx frequency will vary by the same amount. This facilitates the split operation or repeater operation. You can also set the Tx frequency so that it follows exactly the Rx frequency (simplex).
-
-The amount of shift is simply set by changing the frequency in the Tx tab.
-  
 <h3>4: Bias tee</h3>
 
 Use this checkbox to toggle the +5V power supply on the antenna connector.
 
 <h3>5:RF amp</h3>
 
-Use this checkbox to toggle the extra low noise amplifier (LNA). This gives an additional gain of 14 dB. 
+Use this checkbox to toggle the extra low noise amplifier (LNA). This gives an additional gain of 14 dB.
 
-<h3>6: Device sample rate</h3>
+<h3>6A: Device sample rate / Baseband sample rate input toggle</h3>
 
-This is the HackRF device ADC sample rate in S/s.
+Use this toggle button to switch the sample rate input next (6) between device sample rate and baseband sample rate input. The button shows the current mode:
+
+  - **SR**: device sample rate input mode. The baseband sample rate (1.4) is the device sample rate (6) divided by the decimation factor (7).
+  - **BB**: baseband sample rate input mode. The device sample rate (1.4) is the baseband sample rate (6) multiplied by the decimation factor (7).
+
+<h3>6: Sample rate</h3>
+
+This is the HackRF device ADC sample rate or baseband sample rate in samples per second (S/s). The control (6A) is used to switch between the two input modes.
+
+The limits are adjusted automatically. In baseband input mode the limits are driven by the decimation factor (7). You may need to increase this decimation factor to be able to reach lower values.
 
 Use the wheels to adjust the sample rate. Left click on a digit sets the cursor position at this digit. Right click on a digit sets all digits on the right to zero. This effectively floors value at the digit position. Wheels are moved with the mousewheel while pointing at the wheel or by selecting the wheel with the left mouse click and using the keyboard arrows. Pressing shift simultaneously moves digit by 5 and pressing control moves it by 2.
 
@@ -89,13 +87,17 @@ The device stream from the HackRF is decimated to obtain the baseband stream. Po
 <h3>8: Baseband center frequency position relative the the HackRF Rx center frequency</h3>
 
   - **Cen**: the decimation operation takes place around the HackRF Rx center frequency Fs
-  - **Inf**: the decimation operation takes place around Fs - Fc. 
+  - **Inf**: the decimation operation takes place around Fs - Fc.
   - **Sup**: the decimation operation takes place around Fs + Fc.
-  
-With SR as the sample rate before decimation Fc is calculated as: 
 
-  - if decimation n is 4 or lower:  Fc = SR/2^(log2(n)-1). The device center frequency is on the side of the baseband. You need a RF filter bandwidth at least twice the baseband.
-  - if decimation n is 8 or higher: Fc = SR/n. The device center frequency is half the baseband away from the side of the baseband. You need a RF filter bandwidth at least 3 times the baseband.
+With SR as the sample rate before decimation Fc is calculated depending on the decimaton factor:
+
+  - **2**: Fc = SR/4
+  - **4**: Fc = 3*SR/8
+  - **8**: Fc = 5*SR/16
+  - **16**: Fc = 11*SR/32
+  - **32**: Fc = 21*SR/64
+  - **64**: Fc = 21*SR/128
 
 <h3>9: Rx filter bandwidth</h3>
 
@@ -108,3 +110,11 @@ The LNA gain can be adjusted from 0 dB to 40 dB in 8 dB steps.
 <h3>11: Rx variable gain amplifier gain</h3>
 
 The Rx VGA gain can be adjusted from 0 dB to 62 dB in 2 dB steps.
+
+<h2>Frequency synchronization with Tx</h2>
+
+When a device set for the same physical device is present the device center frequencies are synchronized because there is only one LO for the physical device.
+
+When the center frequency position Fc (control 8) is set to center (Cen) in both Rx and Tx the actual frequency of reception and transmission are the same.
+
+In other cases for both frequencies to match you have to set the same sample rate and Fc position (either Inf or Sup) in the Rx and Tx.

@@ -1,11 +1,12 @@
 CMakeLists.txt.user*
-build*
+build*/
 qtbuild/*
 sdriq/*
 presets/*
 LOCAL/*
 sdrangelove.supp
 .cproject
+.flatpak-builder/
 .project
 .pydevproject
 .vscode/
@@ -20,5 +21,6 @@ debian/files
 debian/sdrangel.debhelper.log
 debian/debhelper-build-stamp
 obj-x86_64-linux-gnu/*
-**/venv/
+**/venv*/
 *.pyc
+.DS_Store

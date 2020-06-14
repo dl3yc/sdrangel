@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,7 +22,7 @@
 #include "plugin/plugininterface.h"
 
 class PluginAPI;
-class DeviceSourceAPI;
+class DeviceAPI;
 class DeviceUISet;
 
 #define BLADERF1INPUT_DEVICE_TYPE_ID "sdrangel.samplesource.bladerf1input"
@@ -37,12 +38,14 @@ public:
 	const PluginDescriptor& getPluginDescriptor() const;
 	void initPlugin(PluginAPI* pluginAPI);
 
-	virtual SamplingDevices enumSampleSources();
+	virtual void enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices);
+	virtual SamplingDevices enumSampleSources(const OriginDevices& originDevices);
 	virtual PluginInstanceGUI* createSampleSourcePluginInstanceGUI(
 	        const QString& sourceId,
 	        QWidget **widget,
 	        DeviceUISet *deviceUISet);
-	virtual DeviceSampleSource* createSampleSourcePluginInstanceInput(const QString& sourceId, DeviceSourceAPI *deviceAPI);
+	virtual DeviceSampleSource* createSampleSourcePluginInstance(const QString& sourceId, DeviceAPI *deviceAPI);
+    virtual DeviceWebAPIAdapter* createDeviceWebAPIAdapter() const;
 
 	static const QString m_hardwareID;
     static const QString m_deviceTypeID;

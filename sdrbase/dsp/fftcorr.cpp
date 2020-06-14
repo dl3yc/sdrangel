@@ -1,17 +1,13 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2018 F4EXB                                                      //
+// Copyright (C) 2019 F4EXB                                                      //
 // written by Edouard Griffiths                                                  //
 //                                                                               //
-// FFT based cross correlation                                                   //
-//                                                                               //
-// See: http://liquidsdr.org/blog/pll-howto/                                     //
-// Fixed filter registers saturation                                             //
-// Added order for PSK locking. This brilliant idea actually comes from this     //
-// post: https://www.dsprelated.com/showthread/comp.dsp/36356-1.php              //
+// FFT based cross correlation. Uses FFTW/Kiss engine.                           //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,17 +19,25 @@
 ///////////////////////////////////////////////////////////////////////////////////
 
 #include <algorithm>
+
+#include "dsp/dspengine.h"
+#include "dsp/fftfactory.h"
+#include "dsp/fftengine.h"
 #include "fftcorr.h"
 
 void fftcorr::init_fft()
 {
-    fftA = new g_fft<float>(flen);
-    fftB = new g_fft<float>(flen);
+    FFTFactory *fftFactory = DSPEngine::instance()->getFFTFactory();
+    fftASequence = fftFactory->getEngine(flen, false, &fftA);
+    fftBSequence = fftFactory->getEngine(flen, false, &fftB);
+    fftInvASequence = fftFactory->getEngine(flen, true, &fftInvA);
 
-    dataA   = new cmplx[flen];
-    dataB   = new cmplx[flen];
-    dataBj  = new cmplx[flen];
-    dataP   = new cmplx[flen];
+    m_window.create(FFTWindow::Hanning, flen);
+
+    dataA    = new cmplx[flen];
+    dataB    = new cmplx[flen];
+    dataBj   = new cmplx[flen];
+    dataP    = new cmplx[flen];
 
     std::fill(dataA, dataA+flen, 0);
     std::fill(dataB, dataB+flen, 0);
@@ -43,15 +47,25 @@ void fftcorr::init_fft()
     outptr = 0;
 }
 
-fftcorr::fftcorr(int len) : flen(len), flen2(len>>1)
+fftcorr::fftcorr(int len) :
+    flen(len),
+    flen2(len>>1),
+    fftA(nullptr),
+    fftB(nullptr),
+    fftInvA(nullptr),
+    fftASequence(0),
+    fftBSequence(0),
+    fftInvASequence(0)
 {
     init_fft();
 }
 
 fftcorr::~fftcorr()
 {
-    delete fftA;
-    delete fftB;
+    FFTFactory *fftFactory = DSPEngine::instance()->getFFTFactory();
+    fftFactory->releaseEngine(flen, false, fftASequence);
+    fftFactory->releaseEngine(flen, false, fftBSequence);
+    fftFactory->releaseEngine(flen, true, fftInvASequence);
     delete[] dataA;
     delete[] dataB;
     delete[] dataBj;
@@ -70,21 +84,25 @@ int fftcorr::run(const cmplx& inA, const cmplx* inB, cmplx **out)
         return 0;
     }
 
-    fftA->ComplexFFT(dataA);
+    m_window.apply(dataA, fftA->in());
+    fftA->transform();
 
-    if (inB) {
-        fftB->ComplexFFT(dataB);
+    if (inB)
+    {
+        m_window.apply(dataB, fftB->in());
+        fftB->transform();
     }
 
     if (inB) {
-        std::transform(dataB, dataB+flen, dataBj, [](const cmplx& c) -> cmplx { return std::conj(c); });
+        std::transform(fftB->out(), fftB->out()+flen, dataBj, [](const cmplx& c) -> cmplx { return std::conj(c); });
     } else {
-        std::transform(dataA, dataA+flen, dataBj, [](const cmplx& c) -> cmplx { return std::conj(c); });
+        std::transform(fftA->out(), fftA->out()+flen, dataBj, [](const cmplx& c) -> cmplx { return std::conj(c); });
     }
 
-    std::transform(dataA, dataA+flen, dataBj, dataP, [](const cmplx& a, const cmplx& b) -> cmplx { return a*b; });
+    std::transform(fftA->out(), fftA->out()+flen, dataBj, fftInvA->in(), [](const cmplx& a, const cmplx& b) -> cmplx { return a*b; });
 
-    fftA->InverseComplexFFT(dataP);
+    fftInvA->transform();
+    std::copy(fftInvA->out(), fftInvA->out()+flen, dataP);
 
     std::fill(dataA, dataA+flen, 0);
     inptrA = 0;

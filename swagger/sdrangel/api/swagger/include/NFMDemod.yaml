@@ -6,7 +6,7 @@ NFMDemodSettings:
       type: integer
       format: int64
     rfBandwidth:
-      description: channel RF bandwidth in Hz (takes closest value from RF bandwidth set) 
+      description: channel RF bandwidth in Hz (takes closest value from RF bandwidth set)
       type: number
       format: float
     afBandwidth:
@@ -29,6 +29,8 @@ NFMDemodSettings:
       format: float
     ctcssOn:
       type: integer
+    highPass:
+      type: integer
     audioMute:
       type: integer
     ctcssIndex:
@@ -39,7 +41,21 @@ NFMDemodSettings:
       type: string
     audioDeviceName:
       type: string
-    
+    streamIndex:
+      description: MIMO channel. Not relevant when connected to SI (single Rx).
+      type: integer
+    useReverseAPI:
+      description: Synchronize with reverse API (1 for yes, 0 for no)
+      type: integer
+    reverseAPIAddress:
+      type: string
+    reverseAPIPort:
+      type: integer
+    reverseAPIDeviceIndex:
+      type: integer
+    reverseAPIChannelIndex:
+      type: integer
+
 NFMDemodReport:
   description: NFMDemod
   properties:
@@ -58,4 +74,4 @@ NFMDemodReport:
       type: integer
     channelSampleRate:
       type: integer
-      
+

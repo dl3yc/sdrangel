@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -58,6 +59,7 @@ private:
     bool m_doApplySettings;
 	bool m_forceSettings;
 	RTLSDRSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
 	QTimer m_updateTimer;
 	QTimer m_statusTimer;
 	std::vector<int> m_gains;
@@ -68,6 +70,8 @@ private:
 	MessageQueue m_inputMessageQueue;
 
 	void displayGains();
+    void displaySampleRate();
+    void displayFcTooltip();
 	void displaySettings();
 	void sendSettings();
 	void updateSampleRateAndFrequency();
@@ -92,7 +96,9 @@ private slots:
 	void on_startStop_toggled(bool checked);
     void on_record_toggled(bool checked);
     void on_transverter_clicked();
+    void on_sampleRateMode_toggled(bool checked);
     void openDeviceSettingsDialog(const QPoint& p);
+    void openFileRecordDialog(const QPoint& p);
 	void updateHardware();
 	void updateStatus();
 };

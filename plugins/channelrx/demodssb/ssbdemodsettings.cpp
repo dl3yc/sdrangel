@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -44,17 +45,18 @@ void SSBDemodSettings::resetToDefaults()
     m_audioMute = false;
     m_agc = false;
     m_agcClamping = false;
-    m_agcPowerThreshold = -40;
+    m_agcPowerThreshold = -100;
     m_agcThresholdGate = 4;
     m_agcTimeLog2 = 7;
     m_rfBandwidth = 3000;
     m_lowCutoff = 300;
-    m_volume = 3.0;
+    m_volume = 1.0;
     m_spanLog2 = 3;
     m_inputFrequencyOffset = 0;
     m_rgbColor = QColor(0, 255, 0).rgb();
     m_title = "SSB Demodulator";
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -91,6 +93,7 @@ QByteArray SSBDemodSettings::serialize() const
     s.writeU32(20, m_reverseAPIPort);
     s.writeU32(21, m_reverseAPIDeviceIndex);
     s.writeU32(22, m_reverseAPIChannelIndex);
+    s.writeS32(23, m_streamIndex);
 
     return s.final();
 }
@@ -151,6 +154,7 @@ bool SSBDemodSettings::deserialize(const QByteArray& data)
         m_reverseAPIDeviceIndex = utmp > 99 ? 99 : utmp;
         d.readU32(22, &utmp, 0);
         m_reverseAPIChannelIndex = utmp > 99 ? 99 : utmp;
+        d.readS32(23, &m_streamIndex, 0);
 
         return true;
     }

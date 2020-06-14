@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,7 +18,75 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include <regex>
+
+#include "devicelimesdrparam.h"
 #include "devicelimesdr.h"
+
+
+void DeviceLimeSDR::enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices)
+{
+    lms_info_str_t* deviceList;
+    int nbDevices;
+
+    if ((nbDevices = LMS_GetDeviceList(0)) <= 0)
+    {
+        qDebug("DeviceLimeSDR::enumOriginDevices: Could not find any LimeSDR device");
+        return; // do nothing
+    }
+
+    deviceList = new lms_info_str_t[nbDevices];
+
+    if (LMS_GetDeviceList(deviceList) < 0)
+    {
+        qDebug("DeviceLimeSDR::enumOriginDevices: Could not obtain LimeSDR devices information");
+        delete[] deviceList;
+        return; // do nothing
+    }
+    else
+    {
+        for (int i = 0; i < nbDevices; i++)
+        {
+            std::string serial("N/D");
+            findSerial((const char *) deviceList[i], serial);
+
+            DeviceLimeSDRParams limeSDRParams;
+            limeSDRParams.open(deviceList[i]);
+            limeSDRParams.close();
+
+            QString displayedName(QString("LimeSDR[%1:$1] %2").arg(i).arg(serial.c_str()));
+
+            originDevices.append(PluginInterface::OriginDevice(
+                displayedName,
+                hardwareId,
+                QString(deviceList[i]),
+                i,
+                limeSDRParams.m_nbRxChannels,
+                limeSDRParams.m_nbTxChannels
+            ));
+        }
+    }
+
+    delete[] deviceList;
+}
+
+bool DeviceLimeSDR::findSerial(const char *lmsInfoStr, std::string& serial)
+{
+    std::regex serial_reg("serial=([0-9,A-F]+)");
+    std::string input(lmsInfoStr);
+    std::smatch result;
+    std::regex_search(input, result, serial_reg);
+
+    if (result[1].str().length()>0)
+    {
+        serial = result[1].str();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 
 bool DeviceLimeSDR::setNCOFrequency(lms_device_t *device, bool dir_tx, std::size_t chan, bool enable, float frequency)
 {

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -85,7 +86,9 @@ private:
     bool blockApplySettings(bool block);
     void applySettings(bool force = false);
     void applyBandwidths(int spanLog2, bool force = false);
+    void displayBandwidths(int spanLog2);
     void displaySettings();
+    void displayStreamIndex();
     void updateWithStreamData();
     void updateWithStreamTime();
     void channelMarkerUpdate();

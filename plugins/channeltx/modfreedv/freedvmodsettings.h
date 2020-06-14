@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,6 +21,8 @@
 #include <QByteArray>
 #include <QString>
 #include <stdint.h>
+
+#include "dsp/cwkeyersettings.h"
 
 class Serializable;
 
@@ -56,6 +59,7 @@ struct FreeDVModSettings
     QString m_audioDeviceName;
     FreeDVMode m_freeDVMode;
     bool m_gaugeInputElseModem; //!< Volume gauge shows speech input level else modem level
+    int m_streamIndex;
 
     bool m_useReverseAPI;
     QString m_reverseAPIAddress;
@@ -67,6 +71,8 @@ struct FreeDVModSettings
     Serializable *m_spectrumGUI;
     Serializable *m_cwKeyerGUI;
 
+    CWKeyerSettings m_cwKeyerSettings; //!< For standalone deserialize operation (without m_cwKeyerGUI)
+
     FreeDVModSettings();
     void resetToDefaults();
     void setChannelMarker(Serializable *channelMarker) { m_channelMarker = channelMarker; }
@@ -74,6 +80,8 @@ struct FreeDVModSettings
     void setCWKeyerGUI(Serializable *cwKeyerGUI) { m_cwKeyerGUI = cwKeyerGUI; }
     QByteArray serialize() const;
     bool deserialize(const QByteArray& data);
+    const CWKeyerSettings& getCWKeyerSettings() const { return m_cwKeyerSettings; }
+    void setCWKeyerSettings(const CWKeyerSettings& cwKeyerSettings) { m_cwKeyerSettings = cwKeyerSettings; }
 
     static int getHiCutoff(FreeDVMode freeDVMode);
     static int getLowCutoff(FreeDVMode freeDVMode);

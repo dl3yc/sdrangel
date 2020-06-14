@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -48,6 +49,7 @@ void FreeDVDemodSettings::resetToDefaults()
     m_title = "FreeDV Demodulator";
     m_audioDeviceName = AudioDeviceManager::m_defaultDeviceName;
     m_freeDVMode = FreeDVMode2400A;
+    m_streamIndex = 0;
     m_useReverseAPI = false;
     m_reverseAPIAddress = "127.0.0.1";
     m_reverseAPIPort = 8888;
@@ -77,6 +79,7 @@ QByteArray FreeDVDemodSettings::serialize() const
     s.writeU32(21, m_reverseAPIDeviceIndex);
     s.writeU32(22, m_reverseAPIChannelIndex);
     s.writeS32(23, (int) m_freeDVMode);
+    s.writeS32(24, m_streamIndex);
 
     return s.final();
 }
@@ -137,6 +140,8 @@ bool FreeDVDemodSettings::deserialize(const QByteArray& data)
             m_freeDVMode = (FreeDVMode) tmp;
         }
 
+        d.readS32(24, &m_streamIndex, 0);
+
         return true;
     }
     else
@@ -151,8 +156,6 @@ int FreeDVDemodSettings::getHiCutoff(FreeDVMode freeDVMode)
     switch(freeDVMode)
     {
         case FreeDVMode800XA: // C4FM NB
-            return 2400.0;
-            break;
         case FreeDVMode700C: // OFDM
         case FreeDVMode700D: // OFDM
         case FreeDVMode1600: // OFDM

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,7 +32,7 @@
 #include "remoteoutputsettings.h"
 
 class RemoteOutputThread;
-class DeviceSinkAPI;
+class DeviceAPI;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QJsonObject;
@@ -121,7 +122,7 @@ public:
         { }
     };
 
-	RemoteOutput(DeviceSinkAPI *deviceAPI);
+	RemoteOutput(DeviceAPI *deviceAPI);
 	virtual ~RemoteOutput();
 	virtual void destroy();
 
@@ -135,6 +136,7 @@ public:
     virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
     virtual void setCenterFrequency(qint64 centerFrequency) { (void) centerFrequency; }
 	std::time_t getStartingTimeStamp() const;
@@ -164,8 +166,17 @@ public:
             SWGSDRangel::SWGDeviceState& response,
             QString& errorMessage);
 
+    static void webapiFormatDeviceSettings(
+            SWGSDRangel::SWGDeviceSettings& response,
+            const RemoteOutputSettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            RemoteOutputSettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
 private:
-    DeviceSinkAPI *m_deviceAPI;
+    DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	RemoteOutputSettings m_settings;
 	uint64_t m_centerFrequency;
@@ -190,7 +201,6 @@ private:
     static const uint32_t NbSamplesForRateCorrection;
 
 	void applySettings(const RemoteOutputSettings& settings, bool force = false);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const RemoteOutputSettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
 
     void analyzeApiReply(const QJsonObject& jsonObject, const QString& answer);

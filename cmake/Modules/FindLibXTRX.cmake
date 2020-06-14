@@ -1,21 +1,21 @@
 if(NOT LIBXTRX_FOUND)
-  
+
   pkg_check_modules (LIBXTRX_PKG libxtrx)
-  
-  find_path(LIBXTRX_INCLUDE_DIRS 
+
+  find_path(LIBXTRX_INCLUDE_DIRS
     NAMES xtrx_api.h
-    PATHS ${XTRX_DIR}/include
+    HINTS ${XTRX_DIR}/include
           ${LIBXTRX_PKG_INCLUDE_DIRS}
-          /usr/include
+    PATHS /usr/include
           /usr/local/include
   )
-  
+
   find_library(LIBXTRX_LIBRARY
     NAMES xtrx
-    HINTS ${CMAKE_INSTALL_PREFIX}/lib
+    HINTS ${XTRX_DIR}/lib
+          ${CMAKE_INSTALL_PREFIX}/lib
           ${CMAKE_INSTALL_PREFIX}/lib64
-    PATHS ${XTRX_DIR}/lib
-          /usr/local/lib
+    PATHS /usr/local/lib
           /usr/local/lib64
           /usr/lib
           /usr/lib64
@@ -28,9 +28,7 @@ if(NOT LIBXTRX_FOUND)
     set(LIBXTRX_FOUND FALSE CACHE INTERNAL "libxtrx found")
 	message(STATUS "libxtrx not found.")
   endif()
-	
 
-	
-  mark_as_advanced(LIBXTRX_INCLUDE_DIRS)
+  mark_as_advanced(LIBXTRX_INCLUDE_DIRS LIBXTRX_LIBRARY)
 
 endif(NOT LIBXTRX_FOUND)

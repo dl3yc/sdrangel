@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -33,6 +34,9 @@ namespace SWGSDRangel
 {
     class SWGPresetTransfer;
     class SWGPresetIdentifier;
+    class SWGPreset;
+    class SWGChannelConfig;
+    class SWGDeviceConfig;
 }
 
 class SDRBASE_API WebAPIRequestMapper : public qtwebapp::HttpRequestHandler {
@@ -48,6 +52,7 @@ private:
     qtwebapp::StaticFileController *m_staticFileController;
 
     void instanceSummaryService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceConfigService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instanceDevicesService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instanceChannelsService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instanceLoggingService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
@@ -58,6 +63,12 @@ private:
     void instanceAudioOutputCleanupService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instanceLocationService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instanceDVSerialService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceAMBESerialService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceAMBEDevicesService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceLimeRFESerialService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceLimeRFEConfigService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceLimeRFERunService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void instanceLimeRFEPowerService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instancePresetsService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instancePresetService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void instancePresetFileService(qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
@@ -69,21 +80,74 @@ private:
     void devicesetDeviceService(const std::string& indexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetDeviceSettingsService(const std::string& indexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetDeviceRunService(const std::string& indexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void devicesetDeviceSubsystemRunService(const std::string& indexStr, const std::string& subsystemIndexStr,qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetDeviceReportService(const std::string& indexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void devicesetDeviceActionsService(const std::string& indexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetChannelsReportService(const std::string& deviceSetIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetChannelService(const std::string& deviceSetIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetChannelIndexService(const std::string& deviceSetIndexStr, const std::string& channelIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetChannelSettingsService(const std::string& deviceSetIndexStr, const std::string& channelIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
     void devicesetChannelReportService(const std::string& deviceSetIndexStr, const std::string& channelIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
+    void devicesetChannelActionsService(const std::string& deviceSetIndexStr, const std::string& channelIndexStr, qtwebapp::HttpRequest& request, qtwebapp::HttpResponse& response);
 
     bool validatePresetTransfer(SWGSDRangel::SWGPresetTransfer& presetTransfer);
     bool validatePresetIdentifer(SWGSDRangel::SWGPresetIdentifier& presetIdentifier);
     bool validatePresetExport(SWGSDRangel::SWGPresetExport& presetExport);
     bool validateDeviceListItem(SWGSDRangel::SWGDeviceListItem& deviceListItem, QJsonObject& jsonObject);
     bool validateDeviceSettings(SWGSDRangel::SWGDeviceSettings& deviceSettings, QJsonObject& jsonObject, QStringList& deviceSettingsKeys);
-    bool validateChannelSettings(SWGSDRangel::SWGChannelSettings& deviceSettings, QJsonObject& jsonObject, QStringList& channelSettingsKeys);
+    bool validateDeviceActions(SWGSDRangel::SWGDeviceActions& deviceActions, QJsonObject& jsonObject, QStringList& deviceActionsKeys);
+    bool validateChannelSettings(SWGSDRangel::SWGChannelSettings& channelSettings, QJsonObject& jsonObject, QStringList& channelSettingsKeys);
+    bool validateChannelActions(SWGSDRangel::SWGChannelActions& channelActions, QJsonObject& jsonObject, QStringList& channelActionsKeys);
     bool validateAudioInputDevice(SWGSDRangel::SWGAudioInputDevice& audioInputDevice, QJsonObject& jsonObject, QStringList& audioInputDeviceKeys);
     bool validateAudioOutputDevice(SWGSDRangel::SWGAudioOutputDevice& audioOutputDevice, QJsonObject& jsonObject, QStringList& audioOutputDeviceKeys);
+    bool validateAMBEDevices(SWGSDRangel::SWGAMBEDevices& ambeDevices, QJsonObject& jsonObject);
+    bool validateLimeRFEConfig(SWGSDRangel::SWGLimeRFESettings& limeRFESettings, QJsonObject& jsonObject, QStringList& limeRFESettingsKeys);
+    bool validateConfig(SWGSDRangel::SWGInstanceConfigResponse& config, QJsonObject& jsonObject, WebAPIAdapterInterface::ConfigKeys& configKeys);
+
+    bool appendPresetKeys(
+            SWGSDRangel::SWGPreset *preset,
+            const QJsonObject& presetJson,
+            WebAPIAdapterInterface::PresetKeys& presetKeys);
+
+    bool appendPresetChannelKeys(
+            SWGSDRangel::SWGChannelConfig *channel,
+            const QJsonObject& channelSettngsJson,
+            WebAPIAdapterInterface::ChannelKeys& channelKeys
+    );
+
+    bool getChannelSettings(
+        const QString& channelSettingsKey,
+        SWGSDRangel::SWGChannelSettings *channelSettings,
+        const QJsonObject& channelSettingsJson,
+        QStringList& channelSettingsKeys
+    );
+
+    bool getChannelActions(
+        const QString& channelActionsKey,
+        SWGSDRangel::SWGChannelActions *channelActions,
+        const QJsonObject& channelActionsJson,
+        QStringList& channelSettingsKeys
+    );
+
+    bool appendPresetDeviceKeys(
+            SWGSDRangel::SWGDeviceConfig *device,
+            const QJsonObject& deviceSettngsJson,
+            WebAPIAdapterInterface::DeviceKeys& devicelKeys
+    );
+
+    bool getDeviceSettings(
+        const QString& deviceSettingsKey,
+        SWGSDRangel::SWGDeviceSettings *deviceSettings,
+        const QJsonObject& deviceSettingsJson,
+        QStringList& deviceActionsKeys
+    );
+
+    bool getDeviceActions(
+        const QString& deviceActionsKey,
+        SWGSDRangel::SWGDeviceActions *deviceActions,
+        const QJsonObject& deviceActionsJson,
+        QStringList& deviceActionsKeys
+    );
 
     void appendSettingsSubKeys(
             const QJsonObject& parentSettingsJsonObject,
@@ -91,14 +155,45 @@ private:
             const QString& parentKey,
             QStringList& keyList);
 
+    void appendSettingsArrayKeys(
+            const QJsonObject& parentSettingsJsonObject,
+            const QString& parentKey,
+            QStringList& keyList);
+
     bool parseJsonBody(QString& jsonStr, QJsonObject& jsonObject, qtwebapp::HttpResponse& response);
 
     void resetDeviceSettings(SWGSDRangel::SWGDeviceSettings& deviceSettings);
     void resetDeviceReport(SWGSDRangel::SWGDeviceReport& deviceReport);
+    void resetDeviceActions(SWGSDRangel::SWGDeviceActions& deviceActions);
     void resetChannelSettings(SWGSDRangel::SWGChannelSettings& deviceSettings);
-    void resetChannelReport(SWGSDRangel::SWGChannelReport& deviceSettings);
+    void resetChannelReport(SWGSDRangel::SWGChannelReport& channelReport);
+    void resetChannelActions(SWGSDRangel::SWGChannelActions& channelActions);
     void resetAudioInputDevice(SWGSDRangel::SWGAudioInputDevice& audioInputDevice);
     void resetAudioOutputDevice(SWGSDRangel::SWGAudioOutputDevice& audioOutputDevice);
+
+    void processChannelAnalyzerSettings(
+        SWGSDRangel::SWGChannelSettings *channelSettings,
+        const QJsonObject& channelSettingsJson,
+        QStringList& channelSettingsKeys
+    );
+
+    void processSoapySDRSettings(
+        SWGSDRangel::SWGDeviceSettings *deviceSettings,
+        QJsonObject& deviceSettingsJson,
+        QStringList& deviceSettingsKeys,
+        bool inputElseOutput
+    );
+
+    static const QMap<QString, QString> m_channelURIToSettingsKey;
+    static const QMap<QString, QString> m_deviceIdToSettingsKey;
+    static const QMap<QString, QString> m_channelTypeToSettingsKey;
+    static const QMap<QString, QString> m_sourceDeviceHwIdToSettingsKey;
+    static const QMap<QString, QString> m_sinkDeviceHwIdToSettingsKey;
+    static const QMap<QString, QString> m_mimoDeviceHwIdToSettingsKey;
+    static const QMap<QString, QString> m_channelTypeToActionsKey;
+    static const QMap<QString, QString> m_sourceDeviceHwIdToActionsKey;
+    static const QMap<QString, QString> m_sinkDeviceHwIdToActionsKey;
+    static const QMap<QString, QString> m_mimoDeviceHwIdToActionsKey;
 };
 
 #endif /* SDRBASE_WEBAPI_WEBAPIREQUESTMAPPER_H_ */

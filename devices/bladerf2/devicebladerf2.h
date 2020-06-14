@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,6 +21,7 @@
 #include <stdint.h>
 #include <libbladeRF.h>
 
+#include "plugin/plugininterface.h"
 #include "export.h"
 
 class DEVICES_API DeviceBladeRF2
@@ -28,6 +30,7 @@ public:
     DeviceBladeRF2();
     ~DeviceBladeRF2();
 
+    static void enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices);
     bool open(const char *serial);
     void close();
 

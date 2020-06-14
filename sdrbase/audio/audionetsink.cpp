@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -39,6 +40,8 @@ AudioNetSink::AudioNetSink(QObject *parent) :
     m_port(9998)
 {
     std::fill(m_data, m_data+m_dataBlockSize, 0);
+    std::fill(m_opusIn, m_opusIn+m_opusBlockSize, 0);
+    m_codecRatio = (m_sampleRate / m_decimation) / (AudioOpus::m_bitrate / 8); // compressor ratio
     m_udpSocket = new QUdpSocket(parent);
 }
 
@@ -56,6 +59,8 @@ AudioNetSink::AudioNetSink(QObject *parent, int sampleRate, bool stereo) :
     m_port(9998)
 {
     std::fill(m_data, m_data+m_dataBlockSize, 0);
+    std::fill(m_opusIn, m_opusIn+m_opusBlockSize, 0);
+    m_codecRatio = (m_sampleRate / m_decimation) / (AudioOpus::m_bitrate / 8); // compressor ratio
     m_udpSocket = new QUdpSocket(parent);
     m_rtpBufferAudio = new RTPSink(m_udpSocket, sampleRate, stereo);
 }

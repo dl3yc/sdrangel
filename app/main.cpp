@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -28,21 +29,23 @@
 
 static int runQtApplication(int argc, char* argv[], qtwebapp::LoggerWithFile *logger)
 {
-	QApplication a(argc, argv);
 /*
 	QTextCodec::setCodecForTr(QTextCodec::codecForName("UTF-8"));
 	QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
 */
-	QCoreApplication::setOrganizationName("f4exb");
-	QCoreApplication::setApplicationName("SDRangel");
-    QCoreApplication::setApplicationVersion("4.5.0");
+	QCoreApplication::setOrganizationName(COMPANY);
+	QCoreApplication::setApplicationName(APPLICATION_NAME);
+    QCoreApplication::setApplicationVersion(SDRANGEL_VERSION);
+
 #if QT_VERSION >= 0x050600
 	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling); // DPI support
     QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps); //HiDPI pixmaps
 #endif
 
+	QApplication a(argc, argv);
+
 #if 1
-	qApp->setStyle(QStyleFactory::create("fusion"));
+    qApp->setStyle(QStyleFactory::create("fusion"));
 
 	QPalette palette;
 	palette.setColor(QPalette::Window, QColor(53,53,53));

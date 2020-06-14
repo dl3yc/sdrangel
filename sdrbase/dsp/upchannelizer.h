@@ -1,10 +1,11 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2016 F4EXB                                                      //
+// Copyright (C) 2019 F4EXB                                                      //
 // written by Edouard Griffiths                                                  //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,11 +19,14 @@
 #ifndef SDRBASE_DSP_UPCHANNELIZER_H_
 #define SDRBASE_DSP_UPCHANNELIZER_H_
 
-#include <dsp/basebandsamplesource.h>
-#include <vector>
-#include <QMutex>
+#include <QObject>
+#include <algorithm>
+
 #include "export.h"
 #include "util/message.h"
+
+#include "channelsamplesource.h"
+
 #ifdef USE_SSE4_1
 #include "dsp/inthalfbandfiltereo1.h"
 #else
@@ -31,49 +35,20 @@
 
 #define UPCHANNELIZER_HB_FILTER_ORDER 96
 
-class MessageQueue;
-
-class SDRBASE_API UpChannelizer : public BasebandSampleSource {
-    Q_OBJECT
+class SDRBASE_API UpChannelizer : public ChannelSampleSource {
 public:
-    class SDRBASE_API MsgChannelizerNotification : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        MsgChannelizerNotification(int basebandSampleRate, int samplerate, qint64 frequencyOffset) :
-            Message(),
-            m_basebandSampleRate(basebandSampleRate),
-            m_sampleRate(samplerate),
-            m_frequencyOffset(frequencyOffset)
-        { }
-
-        int getBasebandSampleRate() const { return m_basebandSampleRate; }
-        int getSampleRate() const { return m_sampleRate; }
-        qint64 getFrequencyOffset() const { return m_frequencyOffset; }
-
-        static MsgChannelizerNotification* create(int basebandSampleRate, int samplerate, qint64 frequencyOffset)
-        {
-            return new MsgChannelizerNotification(basebandSampleRate, samplerate, frequencyOffset);
-        }
-
-    private:
-        int m_basebandSampleRate;
-        int m_sampleRate;
-        qint64 m_frequencyOffset;
-    };
-
-    UpChannelizer(BasebandSampleSource* sampleSink);
+    UpChannelizer(ChannelSampleSource* sampleSource);
     virtual ~UpChannelizer();
 
-    void configure(MessageQueue* messageQueue, int sampleRate, int centerFrequency);
-    int getOutputSampleRate() const { return m_outputSampleRate; }
+    virtual void pull(SampleVector::iterator begin, unsigned int nbSamples);
+    virtual void pullOne(Sample& sample);
+    virtual void prefetch(unsigned int nbSamples);
 
-    virtual void start();
-    virtual void stop();
-    virtual void pull(Sample& sample);
-    virtual void pullAudio(int nbSamples) { if (m_sampleSource) m_sampleSource->pullAudio(nbSamples); }
-
-    virtual bool handleMessage(const Message& cmd);
+    void setInterpolation(unsigned int log2Interp, unsigned int filterChainHash);     //!< Define channelizer with interpolation factor and filter chain definition
+    void setChannelization(int requestedSampleRate, qint64 requestedCenterFrequency); //!< Define channelizer with requested sample rate and center frequency (shift in the baseband)
+    void setBasebandSampleRate(int basebandSampleRate, bool interp = false); //!< interp: true => use direct interpolation false => use channel configuration
+    int getChannelSampleRate() const { return m_channelSampleRate; };
+    int getChannelFrequencyOffset() const { return m_channelFrequencyOffset; }
 
 protected:
     struct FilterStage {
@@ -95,31 +70,35 @@ protected:
         FilterStage(Mode mode);
         ~FilterStage();
 
-        bool work(Sample* sampleIn, Sample *sampleOut)
-        {
+        bool work(Sample* sampleIn, Sample *sampleOut) {
             return (m_filter->*m_workFunction)(sampleIn, sampleOut);
         }
     };
+
     typedef std::vector<FilterStage*> FilterStages;
     FilterStages m_filterStages;
+    bool m_filterChainSetMode;
     std::vector<Sample> m_stageSamples;
-    BasebandSampleSource* m_sampleSource; //!< Modulator
-    int m_outputSampleRate;
+    ChannelSampleSource* m_sampleSource; //!< Modulator
+    int m_basebandSampleRate;
     int m_requestedInputSampleRate;
     int m_requestedCenterFrequency;
-    int m_currentInputSampleRate;
-    int m_currentCenterFrequency;
+    int m_channelSampleRate;
+    int m_channelFrequencyOffset;
+    unsigned int m_log2Interp;
+    unsigned int m_filterChainHash;
     SampleVector m_sampleBuffer;
     Sample m_sampleIn;
-    QMutex m_mutex;
 
-    void applyConfiguration();
+    void applyChannelization();
+    void applyInterpolation();
     bool signalContainsChannel(Real sigStart, Real sigEnd, Real chanStart, Real chanEnd) const;
     Real createFilterChain(Real sigStart, Real sigEnd, Real chanStart, Real chanEnd);
+    double setFilterChain(const std::vector<unsigned int>& stageIndexes); //!< returns offset in ratio of sample rate
     void freeFilterChain();
-
-signals:
-    void outputSampleRateChanged();
 };
 
-#endif /* SDRBASE_DSP_UPCHANNELIZER_H_ */
+
+
+
+#endif // SDRBASE_DSP_UPCHANNELIZER_H_

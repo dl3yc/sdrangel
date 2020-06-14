@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -65,6 +66,7 @@ private:
 
 	DeviceUISet* m_deviceUISet;
 	HackRFInputSettings m_settings;
+    bool m_sampleRateMode; //!< true: device, false: base band sample rate update mode
 	bool m_forceSettings;
 	bool m_doApplySettings;
 	QTimer m_updateTimer;
@@ -76,9 +78,12 @@ private:
 	MessageQueue m_inputMessageQueue;
 
 	void displaySettings();
+    void displaySampleRate();
+    void displayFcTooltip();
 	void displayBandwidths();
 	void sendSettings();
     void updateSampleRateAndFrequency();
+    void updateFrequencyLimits();
     void blockApplySettings(bool block);
 
 private slots:
@@ -88,7 +93,6 @@ private slots:
 	void on_LOppm_valueChanged(int value);
 	void on_dcOffset_toggled(bool checked);
 	void on_iqImbalance_toggled(bool checked);
-    void on_linkTxFreq_toggled(bool checked);
 	void on_biasT_stateChanged(int state);
 	void on_decim_currentIndexChanged(int index);
 	void on_fcPos_currentIndexChanged(int index);
@@ -98,9 +102,12 @@ private slots:
 	void on_vga_valueChanged(int value);
 	void on_startStop_toggled(bool checked);
     void on_record_toggled(bool checked);
+    void on_sampleRateMode_toggled(bool checked);
+    void on_transverter_clicked();
 	void updateHardware();
 	void updateStatus();
     void openDeviceSettingsDialog(const QPoint& p);
+    void openFileRecordDialog(const QPoint& p);
 };
 
 #endif // INCLUDE_HACKRFINPUTGUI_H

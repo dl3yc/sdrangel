@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,7 +19,6 @@
 
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
-#include "device/devicesinkapi.h"
 
 #ifdef SERVER_MODE
 #include "filesinkoutput.h"
@@ -28,8 +28,9 @@
 #include "filesinkplugin.h"
 
 const PluginDescriptor FileSinkPlugin::m_pluginDescriptor = {
+    QString("FileSink"),
 	QString("File sink output"),
-	QString("4.2.1"),
+	QString("4.12.3"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -54,30 +55,58 @@ void FileSinkPlugin::initPlugin(PluginAPI* pluginAPI)
 	pluginAPI->registerSampleSink(m_deviceTypeID, this);
 }
 
-PluginInterface::SamplingDevices FileSinkPlugin::enumSampleSinks()
+void FileSinkPlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
+{
+    if (listedHwIds.contains(m_hardwareID)) { // check if it was done
+        return;
+    }
+
+    originDevices.append(OriginDevice(
+        "FileSink",
+        m_hardwareID,
+        QString(),
+        0, // Sequence
+        0, // nb Rx
+        1  // nb Tx
+    ));
+
+    listedHwIds.append(m_hardwareID);
+}
+
+PluginInterface::SamplingDevices FileSinkPlugin::enumSampleSinks(const OriginDevices& originDevices)
 {
 	SamplingDevices result;
 
-    result.append(SamplingDevice(
-            "FileSink",
-            m_hardwareID,
-            m_deviceTypeID,
-            QString::null,
-            0,
-            PluginInterface::SamplingDevice::BuiltInDevice,
-            false,
-            1,
-            0));
+    for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
+    {
+        if (it->hardwareId == m_hardwareID)
+        {
+            result.append(SamplingDevice(
+                it->displayableName,
+                it->hardwareId,
+                m_deviceTypeID,
+                it->serial,
+                it->sequence,
+                PluginInterface::SamplingDevice::BuiltInDevice,
+                PluginInterface::SamplingDevice::StreamSingleTx,
+                1,
+                0
+            ));
+        }
+    }
 
 	return result;
 }
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* FileSinkPlugin::createSampleSinkPluginInstanceGUI(
-        const QString& sinkId __attribute((unused)),
-        QWidget **widget __attribute((unused)),
-        DeviceUISet *deviceUISet __attribute((unused)))
+        const QString& sinkId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sinkId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -99,7 +128,7 @@ PluginInstanceGUI* FileSinkPlugin::createSampleSinkPluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSink* FileSinkPlugin::createSampleSinkPluginInstanceOutput(const QString& sinkId, DeviceSinkAPI *deviceAPI)
+DeviceSampleSink* FileSinkPlugin::createSampleSinkPluginInstance(const QString& sinkId, DeviceAPI *deviceAPI)
 {
     if(sinkId == m_deviceTypeID)
     {

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -17,29 +18,23 @@
 #ifndef PLUGINS_CHANNELTX_REMOTESRC_REMOTESRC_H_
 #define PLUGINS_CHANNELTX_REMOTESRC_REMOTESRC_H_
 
-#include <channel/remotedatablock.h>
-#include <channel/remotedataqueue.h>
-#include <channel/remotedatareadqueue.h>
 #include <QObject>
 #include <QNetworkRequest>
 
-#include "cm256.h"
-
 #include "dsp/basebandsamplesource.h"
-#include "channel/channelsourceapi.h"
+#include "channel/channelapi.h"
 #include "util/message.h"
 
-#include "../remotesource/remotesourcesettings.h"
+#include "remotesourcesettings.h"
 
-class ThreadedBasebandSampleSource;
-class UpChannelizer;
-class DeviceSinkAPI;
-class RemoteSourceThread;
-class RemoteDataBlock;
 class QNetworkAccessManager;
 class QNetworkReply;
+class QThread;
 
-class RemoteSource : public BasebandSampleSource, public ChannelSourceAPI {
+class DeviceAPI;
+class RemoteSourceBaseband;
+
+class RemoteSource : public BasebandSampleSource, public ChannelAPI {
     Q_OBJECT
 
 public:
@@ -64,26 +59,6 @@ public:
             m_settings(settings),
             m_force(force)
         { }
-    };
-
-    class MsgSampleRateNotification : public Message {
-        MESSAGE_CLASS_DECLARATION
-
-    public:
-        static MsgSampleRateNotification* create(int sampleRate) {
-            return new MsgSampleRateNotification(sampleRate);
-        }
-
-        int getSampleRate() const { return m_sampleRate; }
-
-    private:
-
-        MsgSampleRateNotification(int sampleRate) :
-            Message(),
-            m_sampleRate(sampleRate)
-        { }
-
-        int m_sampleRate;
     };
 
     class MsgQueryStreamData : public Message {
@@ -179,20 +154,29 @@ public:
         { }
     };
 
-    RemoteSource(DeviceSinkAPI *deviceAPI);
+    RemoteSource(DeviceAPI *deviceAPI);
     ~RemoteSource();
 
     virtual void destroy() { delete this; }
 
-    virtual void pull(Sample& sample);
-    virtual void pullAudio(int nbSamples);
     virtual void start();
     virtual void stop();
+    virtual void pull(SampleVector::iterator& begin, unsigned int nbSamples);
     virtual bool handleMessage(const Message& cmd);
 
     virtual void getIdentifier(QString& id) { id = objectName(); }
     virtual void getTitle(QString& title) { title = m_settings.m_title; }
     virtual qint64 getCenterFrequency() const { return 0; }
+
+    virtual int getNbSinkStreams() const { return 0; }
+    virtual int getNbSourceStreams() const { return 1; }
+
+    virtual qint64 getStreamCenterFrequency(int streamIndex, bool sinkElseSource) const
+    {
+        (void) streamIndex;
+        (void) sinkElseSource;
+        return 0;
+    }
 
     virtual QByteArray serialize() const;
     virtual bool deserialize(const QByteArray& data);
@@ -211,45 +195,35 @@ public:
             SWGSDRangel::SWGChannelReport& response,
             QString& errorMessage);
 
-    void setDataLink(const QString& dataAddress, uint16_t dataPort);
+    static void webapiFormatChannelSettings(
+        SWGSDRangel::SWGChannelSettings& response,
+        const RemoteSourceSettings& settings);
+
+    static void webapiUpdateChannelSettings(
+            RemoteSourceSettings& settings,
+            const QStringList& channelSettingsKeys,
+            SWGSDRangel::SWGChannelSettings& response);
+
+    uint32_t getNumberOfDeviceStreams() const;
 
     static const QString m_channelIdURI;
     static const QString m_channelId;
 
 private:
-    DeviceSinkAPI* m_deviceAPI;
-    ThreadedBasebandSampleSource* m_threadedChannelizer;
-    UpChannelizer* m_channelizer;
-    RemoteDataQueue m_dataQueue;
-    RemoteSourceThread *m_sourceThread;
-    CM256 m_cm256;
-    CM256 *m_cm256p;
-    bool m_running;
-
+    DeviceAPI* m_deviceAPI;
+    QThread *m_thread;
+    RemoteSourceBaseband *m_basebandSource;
     RemoteSourceSettings m_settings;
-
-    CM256::cm256_block   m_cm256DescriptorBlocks[2*RemoteNbOrginalBlocks]; //!< CM256 decoder descriptors (block addresses and block indexes)
-    RemoteMetaDataFEC m_currentMeta;
-
-    RemoteDataReadQueue m_dataReadQueue;
-
-    uint32_t m_nbCorrectableErrors;   //!< count of correctable errors in number of blocks
-    uint32_t m_nbUncorrectableErrors; //!< count of uncorrectable errors in number of blocks
 
     QNetworkAccessManager *m_networkManager;
     QNetworkRequest m_networkRequest;
 
     void applySettings(const RemoteSourceSettings& settings, bool force = false);
-    void handleDataBlock(RemoteDataBlock *dataBlock);
-    void printMeta(const QString& header, RemoteMetaDataFEC *metaData);
-    uint32_t calculateDataReadQueueSize(int sampleRate);
-    void webapiFormatChannelSettings(SWGSDRangel::SWGChannelSettings& response, const RemoteSourceSettings& settings);
     void webapiFormatChannelReport(SWGSDRangel::SWGChannelReport& response);
     void webapiReverseSendSettings(QList<QString>& channelSettingsKeys, const RemoteSourceSettings& settings, bool force);
 
 private slots:
     void networkManagerFinished(QNetworkReply *reply);
-    void handleData();
 };
 
 #endif // PLUGINS_CHANNELTX_REMOTESRC_REMOTESRC_H_

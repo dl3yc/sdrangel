@@ -1,7 +1,5 @@
 
-#include <device/devicesourceapi.h>
 #include "device/deviceuiset.h"
-#include <dsp/downchannelizer.h>
 #include <QDockWidget>
 #include <QMainWindow>
 
@@ -121,9 +119,9 @@ LoRaDemodGUI::LoRaDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	setAttribute(Qt::WA_DeleteOnClose, true);
 	connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
 
-	m_spectrumVis = new SpectrumVis(SDR_RX_SCALEF, ui->glSpectrum);
 	m_LoRaDemod = (LoRaDemod*) rxChannel; //new LoRaDemod(m_deviceUISet->m_deviceSourceAPI);
-	m_LoRaDemod->setSpectrumSink(m_spectrumVis);
+    m_spectrumVis = m_LoRaDemod->getSpectrumVis();
+    m_spectrumVis->setGLSpectrum(ui->glSpectrum);
 
 	ui->glSpectrum->setCenterFrequency(16000);
 	ui->glSpectrum->setSampleRate(32000);
@@ -139,7 +137,7 @@ LoRaDemodGUI::LoRaDemodGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	m_deviceUISet->addChannelMarker(&m_channelMarker);
 	m_deviceUISet->addRollupWidget(this);
 
-	ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+	ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
 	m_settings.setChannelMarker(&m_channelMarker);
 	m_settings.setSpectrumGUI(ui->spectrumGUI);
@@ -152,7 +150,6 @@ LoRaDemodGUI::~LoRaDemodGUI()
 {
     m_deviceUISet->removeRxChannelInstance(this);
 	delete m_LoRaDemod; // TODO: check this: when the GUI closes it has to delete the demodulator
-	delete m_spectrumVis;
 	delete ui;
 }
 
@@ -166,12 +163,6 @@ void LoRaDemodGUI::applySettings(bool force)
 	if (m_doApplySettings)
 	{
         setTitleColor(m_channelMarker.getColor());
-
-        LoRaDemod::MsgConfigureChannelizer* channelConfigMsg = LoRaDemod::MsgConfigureChannelizer::create(
-                LoRaDemodSettings::bandwidths[m_settings.m_bandwidthIndex],
-                m_channelMarker.getCenterFrequency());
-        m_LoRaDemod->getInputMessageQueue()->push(channelConfigMsg);
-
         LoRaDemod::MsgConfigureLoRaDemod* message = LoRaDemod::MsgConfigureLoRaDemod::create( m_settings, force);
         m_LoRaDemod->getInputMessageQueue()->push(message);
 	}

@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -58,7 +59,7 @@ public:
 
     /** Returns a pointer to the (constant) error description.
      *  @return A pointer to a \c const \c char*. The underlying memory
-     *          is in posession of the \c Exception object. Callers \a must
+     *          is in possession of the \c Exception object. Callers \a must
      *          not attempt to free the memory.
      */
     virtual const char* what() const throw (){  return m_sMsg.c_str(); }

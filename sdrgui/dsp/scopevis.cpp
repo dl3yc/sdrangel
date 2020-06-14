@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -36,7 +37,7 @@ MESSAGE_CLASS_DEFINITION(ScopeVis::MsgScopeVisNGFocusOnTrace, Message)
 MESSAGE_CLASS_DEFINITION(ScopeVis::MsgScopeVisNGOneShot, Message)
 MESSAGE_CLASS_DEFINITION(ScopeVis::MsgScopeVisNGMemoryTrace, Message)
 
-const uint ScopeVis::m_traceChunkSize = 4800;
+const uint ScopeVis::m_traceChunkDefaultSize = 4800;
 
 
 ScopeVis::ScopeVis(GLScope* glScope) :
@@ -47,15 +48,16 @@ ScopeVis::ScopeVis(GLScope* glScope) :
     m_focusedTriggerIndex(0),
     m_triggerState(TriggerUntriggered),
     m_focusedTraceIndex(0),
-    m_traceSize(m_traceChunkSize),
-    m_liveTraceSize(m_traceChunkSize),
+    m_traceChunkSize(m_traceChunkDefaultSize),
+    m_traceSize(m_traceChunkDefaultSize),
+    m_liveTraceSize(m_traceChunkDefaultSize),
     m_nbSamples(0),
     m_timeBase(1),
     m_timeOfsProMill(0),
     m_traceStart(true),
+    m_triggerLocation(0),
     m_sampleRate(0),
     m_liveSampleRate(0),
-    m_liveLog2Decim(0),
     m_traceDiscreteMemory(m_nbTraceMemories),
     m_freeRun(true),
     m_maxTraceDelay(0),
@@ -64,7 +66,7 @@ ScopeVis::ScopeVis(GLScope* glScope) :
     m_currentTraceMemoryIndex(0)
 {
     setObjectName("ScopeVis");
-    m_traceDiscreteMemory.resize(m_traceChunkSize); // arbitrary
+    m_traceDiscreteMemory.resize(m_traceChunkDefaultSize); // arbitrary
     m_glScope->setTraces(&m_traces.m_tracesData, &m_traces.m_traces[0]);
     for (int i = 0; i < (int) Projector::nbProjectionTypes; i++) {
         m_projectorCache[i] = 0.0;
@@ -83,14 +85,8 @@ void ScopeVis::setLiveRate(int sampleRate)
     m_liveSampleRate = sampleRate;
 
     if (m_currentTraceMemoryIndex == 0) { // update only in live mode
-        setSampleRate(m_liveSampleRate/(1<<m_liveLog2Decim));
+        setSampleRate(m_liveSampleRate);
     }
-}
-
-void ScopeVis::setLiveRateLog2Decim(int log2Decim)
-{
-    m_liveLog2Decim = log2Decim;
-    setLiveRate(m_liveSampleRate);
 }
 
 void ScopeVis::setSampleRate(int sampleRate)
@@ -611,7 +607,7 @@ int ScopeVis::processTraces(const SampleVector::const_iterator& cbegin, const Sa
     float traceTime = ((float) m_traceSize) / m_sampleRate;
 
     if (traceTime >= 1.0f) { // display continuously if trace time is 1 second or more
-        m_glScope->newTraces(m_traces.m_traces, m_traces.currentBufferIndex());
+        m_glScope->newTraces(m_traces.m_traces, m_traces.currentBufferIndex(), &m_traces.m_projectionTypes);
     }
 
     if (m_nbSamples == 0) // finished
@@ -620,7 +616,7 @@ int ScopeVis::processTraces(const SampleVector::const_iterator& cbegin, const Sa
         if (traceTime < 1.0f)
         {
             if (m_glScope->getProcessingTraceIndex().load() < 0) {
-                m_glScope->newTraces(m_traces.m_traces, m_traces.currentBufferIndex());
+                m_glScope->newTraces(m_traces.m_traces, m_traces.currentBufferIndex(), &m_traces.m_projectionTypes);
             }
         }
 

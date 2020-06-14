@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -146,7 +147,7 @@ public:
         }
     };
 
-    static const uint32_t m_traceChunkSize;
+    static const uint32_t m_traceChunkDefaultSize;
     static const uint32_t m_maxNbTriggers = 10;
     static const uint32_t m_maxNbTraces = 10;
     static const uint32_t m_nbTraceMemories = 50;
@@ -155,7 +156,6 @@ public:
     virtual ~ScopeVis();
 
     void setLiveRate(int sampleRate);
-    void setLiveRateLog2Decim(int log2Decim);
     void configure(uint32_t traceSize, uint32_t timeBase, uint32_t timeOfsProMill, uint32_t triggerPre, bool freeRun);
     void addTrace(const TraceData& traceData);
     void changeTrace(const TraceData& traceData, uint32_t traceIndex);
@@ -169,6 +169,8 @@ public:
     void focusOnTrigger(uint32_t triggerIndex);
     void setOneShot(bool oneShot);
     void setMemoryIndex(uint32_t memoryIndex);
+    void setTraceChunkSize(uint32_t chunkSize) { m_traceChunkSize = chunkSize; }
+    uint32_t getTraceChunkSize() const { return m_traceChunkSize; }
 
     QByteArray serializeMemory() const
     {
@@ -198,7 +200,7 @@ public:
             QByteArray buf;
             bool traceDiscreteMemorySuccess;
 
-            d.readU32(1, &traceSize, m_traceChunkSize);
+            d.readU32(1, &traceSize, m_traceChunkDefaultSize);
             d.readU32(2, &preTriggerDelay, 0);
             d.readS32(3, &sampleRate, 0);
             setSampleRate(sampleRate);
@@ -573,7 +575,7 @@ private:
         TriggerData m_triggerData;    //!< Trigger data
         bool m_prevCondition;         //!< Condition (above threshold) at previous sample
         uint32_t m_triggerDelayCount; //!< Counter of samples for delay
-        uint32_t m_triggerCounter;    //!< Counter of trigger occurences
+        uint32_t m_triggerCounter;    //!< Counter of trigger occurrences
         uint32_t m_trues;             //!< Count of true conditions for holdoff processing
         uint32_t m_falses;            //!< Count of false conditions for holdoff processing
 
@@ -875,6 +877,7 @@ private:
         std::vector<TraceControl*> m_tracesControl;   //!< Corresponding traces control data
         std::vector<TraceData> m_tracesData;          //!< Corresponding traces data
         std::vector<float *> m_traces[2];             //!< Double buffer of traces processed by glScope
+        std::vector<Projector::ProjectionType> m_projectionTypes;
         int m_traceSize;                              //!< Current size of a trace in buffer
         int m_maxTraceSize;                           //!< Maximum Size of a trace in buffer
         bool evenOddIndex;                            //!< Even (true) or odd (false) index
@@ -921,6 +924,7 @@ private:
                 m_traces[0].push_back(0);
                 m_traces[1].push_back(0);
                 m_tracesData.push_back(traceData);
+                m_projectionTypes.push_back(traceData.m_projectionType);
                 m_tracesControl.push_back(new TraceControl());
                 TraceControl *traceControl = m_tracesControl.back();
                 traceControl->initProjector(traceData.m_projectionType);
@@ -936,6 +940,7 @@ private:
                 traceControl->releaseProjector();
                 traceControl->initProjector(traceData.m_projectionType);
                 m_tracesData[traceIndex] = traceData;
+                m_projectionTypes[traceIndex] = traceData.m_projectionType;
             }
         }
 
@@ -946,6 +951,7 @@ private:
                 qDebug("ScopeVis::removeTrace");
                 m_traces[0].erase(m_traces[0].begin() + traceIndex);
                 m_traces[1].erase(m_traces[1].begin() + traceIndex);
+                m_projectionTypes.erase(m_projectionTypes.begin() + traceIndex);
                 TraceControl *traceControl = m_tracesControl[traceIndex];
                 traceControl->releaseProjector();
                 m_tracesControl.erase(m_tracesControl.begin() + traceIndex);
@@ -964,6 +970,11 @@ private:
 
             int nextControlIndex = (traceIndex + (upElseDown ? 1 : -1)) % (m_tracesControl.size());
             int nextDataIndex = (traceIndex + (upElseDown ? 1 : -1)) % (m_tracesData.size()); // should be the same
+            int nextProjectionTypeIndex = (traceIndex + (upElseDown ? 1 : -1)) % (m_projectionTypes.size()); // should be the same
+
+            Projector::ProjectionType nextType = m_projectionTypes[traceIndex];
+            m_projectionTypes[nextProjectionTypeIndex] = m_projectionTypes[traceIndex];
+            m_projectionTypes[traceIndex] = nextType;
 
             TraceControl *traceControl = m_tracesControl[traceIndex];
             TraceControl *nextTraceControl = m_tracesControl[nextControlIndex];
@@ -1126,6 +1137,7 @@ private:
     TriggerState m_triggerState;                   //!< Current trigger state
     Traces m_traces;                               //!< Displayable traces
     int m_focusedTraceIndex;                       //!< Index of the trace that has focus
+    uint32_t m_traceChunkSize;                     //!< Trace length unit size in number of samples
     uint32_t m_traceSize;                          //!< Size of traces in number of samples
     uint32_t m_liveTraceSize;                      //!< Size of traces in number of samples in live mode
     int m_nbSamples;                               //!< Number of samples yet to process in one complex trace
@@ -1135,7 +1147,6 @@ private:
     int m_triggerLocation;                         //!< Trigger location from end point
     int m_sampleRate;                              //!< Actual sample rate being used
     int m_liveSampleRate;                          //!< Sample rate in live mode
-    int m_liveLog2Decim;                           //!< Sample rate decimation log2 in live mode
     TraceBackDiscreteMemory m_traceDiscreteMemory; //!< Complex trace memory for triggered states TODO: vectorize when more than on input is allowed
     bool m_freeRun;                                //!< True if free running (trigger globally disabled)
     int m_maxTraceDelay;                           //!< Maximum trace delay

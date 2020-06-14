@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -32,10 +33,6 @@
 class PluginAPI;
 class DeviceUISet;
 class BasebandSampleSink;
-//class DeviceSourceAPI;
-//class ThreadedBasebandSampleSink;
-class DownChannelizer;
-//class DATVDemod;
 
 namespace Ui
 {
@@ -60,7 +57,6 @@ public:
     bool deserialize(const QByteArray& arrData);
 
     virtual MessageQueue *getInputMessageQueue() { return &m_inputMessageQueue; }
-
     virtual bool handleMessage(const Message& objMessage);
 
     static const QString m_strChannelID;
@@ -71,29 +67,35 @@ private slots:
 
     void onWidgetRolled(QWidget* widget, bool rollDown);
     void onMenuDoubleClicked();
+    void handleInputMessages();
+    void audioSelect();
     void tick();
 
-    void on_cmbStandard_currentIndexChanged(const QString &arg1);
+    void on_cmbStandard_currentIndexChanged(int index);
     void on_cmbModulation_currentIndexChanged(const QString &arg1);
     void on_cmbFEC_currentIndexChanged(const QString &arg1);
     void on_chkViterbi_clicked();
     void on_chkHardMetric_clicked();
-    void on_pushButton_2_clicked();
+    void on_resetDefaults_clicked();
     void on_spiSymbolRate_valueChanged(int arg1);
     void on_spiNotchFilters_valueChanged(int arg1);
     void on_chkAllowDrift_clicked();
-    void on_pushButton_3_clicked();
-    void on_pushButton_4_clicked();
+    void on_fullScreen_clicked();
     void on_mouseEvent(QMouseEvent* obj);
     void on_StreamDataAvailable(int *intPackets, int *intBytes, int *intPercent, qint64 *intTotalReceived);
     void on_StreamMetaDataChanged(DataTSMetaData2 *objMetaData);
-    void on_spiBandwidth_valueChanged(int arg1);
     void on_chkFastlock_clicked();
     void on_cmbFilter_currentIndexChanged(int index);
     void on_spiRollOff_valueChanged(int arg1);
     void on_spiExcursion_valueChanged(int arg1);
     void on_deltaFrequency_changed(qint64 value);
     void on_rfBandwidth_changed(qint64 value);
+    void on_audioMute_toggled(bool checked);
+    void on_audioVolume_valueChanged(int value);
+    void on_videoMute_toggled(bool checked);
+    void on_udpTS_clicked(bool checked);
+    void on_udpTSAddress_editingFinished();
+    void on_udpTSPort_editingFinished();
 
 private:
     Ui::DATVDemodGUI* ui;
@@ -101,11 +103,10 @@ private:
     DeviceUISet* m_deviceUISet;
 
     ChannelMarker m_objChannelMarker;
-    ThreadedBasebandSampleSink* m_objThreadedChannelizer;
-    DownChannelizer* m_objChannelizer;
     DATVDemod* m_objDATVDemod;
     MessageQueue m_inputMessageQueue;
     int m_intCenterFrequency;
+    DATVDemodSettings m_settings;
 
     QTimer m_objTimer;
     qint64 m_intPreviousDecodedData;
@@ -116,6 +117,9 @@ private:
     bool m_blnBasicSettingsShown;
     bool m_blnDoApplySettings;
     bool m_blnButtonPlayClicked;
+    int m_modcodModulationIndex;
+    int m_modcodCodeRateIndex;
+    bool m_cstlnSetByModcod;
 
     MovingAverageUtil<double, double, 4> m_objMagSqAverage;
 
@@ -123,7 +127,9 @@ private:
     virtual ~DATVDemodGUI();
 
     void blockApplySettings(bool blnBlock);
-	void applySettings();
+	void applySettings(bool force = false);
+    void displaySettings();
+    void displaySystemConfiguration();
     QString formatBytes(qint64 intBytes);
 
     void displayRRCParameters(bool blnVisible);

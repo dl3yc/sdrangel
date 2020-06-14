@@ -13,40 +13,24 @@ set(bladerf1device_HEADERS
     devicebladerf1shared.h
 )
 
-if (BUILD_DEBIAN)
 include_directories(
-    .
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${LIBBLADERFLIBSRC}/include
-    ${LIBBLADERFLIBSRC}/src
+    ${LIBBLADERF_INCLUDE_DIRS}
 )
-else (BUILD_DEBIAN)
-include_directories(
-    .
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${LIBBLADERF_INCLUDE_DIR}
-)
-endif (BUILD_DEBIAN)
-
-#add_definitions(${QT_DEFINITIONS})
-#add_definitions(-DQT_SHARED)
 
 add_library(bladerf1device SHARED
     ${bladerf1device_SOURCES}
 )
 
-set_target_properties(bladerf1device PROPERTIES DEFINE_SYMBOL "devices_EXPORTS")
+if(LIBBLADERF_EXTERNAL)
+    add_dependencies(bladerf1device bladerf)
+endif()
 
-if (BUILD_DEBIAN)
-target_link_libraries(bladerf1device
-    bladerf
-    sdrbase
-)
-else (BUILD_DEBIAN)
+set_target_properties(bladerf1device
+    PROPERTIES DEFINE_SYMBOL "devices_EXPORTS")
+
 target_link_libraries(bladerf1device
     ${LIBBLADERF_LIBRARIES}
     sdrbase
 )
-endif (BUILD_DEBIAN)
 
-install(TARGETS bladerf1device DESTINATION lib)
+install(TARGETS bladerf1device DESTINATION ${INSTALL_LIB_DIR})

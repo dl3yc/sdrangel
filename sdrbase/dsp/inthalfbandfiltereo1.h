@@ -9,6 +9,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -620,6 +621,38 @@ public:
         doInterpolateFIR(x2, y2);
     }
 
+    void myInterpolateInf(qint32 *x1, qint32 *y1, qint32 *x2, qint32 *y2, qint32 *x3, qint32 *y3, qint32 *x4, qint32 *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = *y1;
+        *y1 = -x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = -*y3;
+        *y3 = x;
+    }
+
+    void myInterpolateSup(qint32 *x1, qint32 *y1, qint32 *x2, qint32 *y2, qint32 *x3, qint32 *y3, qint32 *x4, qint32 *y4)
+    {
+        myInterpolate(x1, y1, x2, y2);
+        myInterpolate(x3, y3, x4, y4);
+        // rotation
+        qint32 x;
+        x = *x1;
+        *x1 = -*y1;
+        *y1 = x;
+        *x2 = -*x2;
+        *y2 = -*y2;
+        x = *x3;
+        *x3 = *y3;
+        *y3 = -x;
+    }
+
 protected:
     int32_t m_even[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder]; // double buffer technique
     int32_t m_odd[2][HBFIRFilterTraits<HBFilterOrder>::hbOrder]; // double buffer technique
@@ -680,15 +713,6 @@ protected:
         int32_t iAcc = 0;
         int32_t qAcc = 0;
 
-//#if defined(USE_SSE4_1) && !defined(NO_DSP_SIMD)
-//        IntHalfbandFilterEO1Intrisics<HBFilterOrder>::work(
-//                m_ptr,
-//                m_even,
-//                m_odd,
-//                iAcc,
-//                qAcc
-//        );
-//#else
         int a = m_ptr/2 + m_size; // tip pointer
         int b = m_ptr/2 + 1; // tail pointer
 
@@ -708,7 +732,6 @@ protected:
             a -= 1;
             b += 1;
         }
-//#endif
 
         if ((m_ptr % 2) == 0)
         {
@@ -730,15 +753,6 @@ protected:
         int32_t iAcc = 0;
         int32_t qAcc = 0;
 
-//#if defined(USE_SSE4_1) && !defined(NO_DSP_SIMD)
-//        IntHalfbandFilterEO1Intrisics<HBFilterOrder>::work(
-//                m_ptr,
-//                m_even,
-//                m_odd,
-//                iAcc,
-//                qAcc
-//        );
-//#else
         int a = m_ptr/2 + m_size; // tip pointer
         int b = m_ptr/2 + 1; // tail pointer
 
@@ -758,7 +772,7 @@ protected:
             a -= 1;
             b += 1;
         }
-//#endif
+
         if ((m_ptr % 2) == 0)
         {
             iAcc += ((int32_t)m_odd[0][m_ptr/2 + m_size/2]) << (HBFIRFilterTraits<HBFilterOrder>::hbShift - 1);

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -22,7 +23,6 @@
 
 #include "freedvmodgui.h"
 
-#include "device/devicesinkapi.h"
 #include "device/deviceuiset.h"
 #include "dsp/spectrumvis.h"
 #include "plugin/pluginapi.h"
@@ -30,9 +30,11 @@
 #include "util/db.h"
 #include "dsp/dspengine.h"
 #include "dsp/dspcommands.h"
+#include "dsp/cwkeyer.h"
 #include "gui/crightclickenabler.h"
 #include "gui/audioselectdialog.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "mainwindow.h"
 #include "ui_freedvmodgui.h"
 
@@ -130,7 +132,8 @@ bool FreeDVModGUI::handleMessage(const Message& message)
     else if (CWKeyer::MsgConfigureCWKeyer::match(message))
     {
         const CWKeyer::MsgConfigureCWKeyer& cfg = (CWKeyer::MsgConfigureCWKeyer&) message;
-        ui->cwKeyerGUI->displaySettings(cfg.getSettings());
+        ui->cwKeyerGUI->setSettings(cfg.getSettings());
+        ui->cwKeyerGUI->displaySettings();
         return true;
     }
     else
@@ -303,29 +306,48 @@ void FreeDVModGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 
 void FreeDVModGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettings();
+        applySettings();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_freeDVMod->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 FreeDVModGUI::FreeDVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandSampleSource *channelTx, QWidget* parent) :
@@ -347,9 +369,9 @@ FreeDVModGUI::FreeDVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 	connect(this, SIGNAL(widgetRolled(QWidget*,bool)), this, SLOT(onWidgetRolled(QWidget*,bool)));
 	connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
 
-	m_spectrumVis = new SpectrumVis(SDR_TX_SCALEF, ui->glSpectrum);
 	m_freeDVMod = (FreeDVMod*) channelTx;
-	m_freeDVMod->setSpectrumSampleSink(m_spectrumVis);
+    m_spectrumVis = m_freeDVMod->getSpectrumVis();
+	m_spectrumVis->setGLSpectrum(ui->glSpectrum);
 	m_freeDVMod->setMessageQueueToGUI(getInputMessageQueue());
 
     resetToDefaults();
@@ -370,6 +392,7 @@ FreeDVModGUI::FreeDVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
     ui->deltaFrequency->setColorMapper(ColorMapper(ColorMapper::GrayGold));
     ui->deltaFrequency->setValueRange(false, 7, -9999999, 9999999);
 
+    m_channelMarker.setSourceOrSinkStream(false);
 	m_channelMarker.setVisible(true);
 
     m_deviceUISet->registerTxChannelInstance(FreeDVMod::m_channelIdURI, this);
@@ -378,15 +401,15 @@ FreeDVModGUI::FreeDVModGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, Baseb
 
     connect(&m_channelMarker, SIGNAL(changedByCursor()), this, SLOT(channelMarkerChangedByCursor()));
 
-    ui->cwKeyerGUI->setBuddies(m_freeDVMod->getInputMessageQueue(), m_freeDVMod->getCWKeyer());
-    ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+    ui->cwKeyerGUI->setCWKeyer(m_freeDVMod->getCWKeyer());
+    ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
     m_settings.setChannelMarker(&m_channelMarker);
     m_settings.setSpectrumGUI(ui->spectrumGUI);
     m_settings.setCWKeyerGUI(ui->cwKeyerGUI);
 
 	connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
-	connect(m_freeDVMod, SIGNAL(levelChanged(qreal, qreal, int)), ui->volumeMeter, SLOT(levelChanged(qreal, qreal, int)));
+    m_freeDVMod->setLevelMeter(ui->volumeMeter);
 
     displaySettings();
     applyBandwidths(5 - ui->spanLog2->value(), true); // does applySettings(true)
@@ -396,7 +419,6 @@ FreeDVModGUI::~FreeDVModGUI()
 {
     m_deviceUISet->removeTxChannelInstance(this);
 	delete m_freeDVMod; // TODO: check this: when the GUI closes it has to delete the modulator
-	delete m_spectrumVis;
 	delete ui;
 }
 
@@ -411,10 +433,6 @@ void FreeDVModGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-		FreeDVMod::MsgConfigureChannelizer *msgChan = FreeDVMod::MsgConfigureChannelizer::create(
-		        48000, m_settings.m_inputFrequencyOffset);
-        m_freeDVMod->getInputMessageQueue()->push(msgChan);
-
 		FreeDVMod::MsgConfigureFreeDVMod *msg = FreeDVMod::MsgConfigureFreeDVMod::create(m_settings, force);
 		m_freeDVMod->getInputMessageQueue()->push(msg);
 	}
@@ -422,10 +440,17 @@ void FreeDVModGUI::applySettings(bool force)
 
 void FreeDVModGUI::applyBandwidths(int spanLog2, bool force)
 {
+    displayBandwidths(spanLog2);
+    m_settings.m_spanLog2 = spanLog2;
+    applySettings(force);
+}
+
+void FreeDVModGUI::displayBandwidths(int spanLog2)
+{
     m_spectrumRate = m_freeDVMod->getModemSampleRate() / (1<<spanLog2);
     int bwMax = m_freeDVMod->getModemSampleRate() / (100*(1<<spanLog2));
 
-    qDebug() << "FreeDVModGUI::applyBandwidths:"
+    qDebug() << "FreeDVModGUI::displayBandwidths:"
             << " spanLog2: " << spanLog2
             << " m_spectrumRate: " << m_spectrumRate
             << " bwMax: " << bwMax;
@@ -437,10 +462,6 @@ void FreeDVModGUI::applyBandwidths(int spanLog2, bool force)
     ui->glSpectrum->setSampleRate(m_spectrumRate);
     ui->glSpectrum->setSsbSpectrum(true);
     ui->glSpectrum->setLsbDisplay(false);
-
-    m_settings.m_spanLog2 = spanLog2;
-
-    applySettings(force);
 }
 
 void FreeDVModGUI::displaySettings()
@@ -456,15 +477,18 @@ void FreeDVModGUI::displaySettings()
 
     setTitleColor(m_settings.m_rgbColor);
     setWindowTitle(m_channelMarker.getTitle());
+    displayStreamIndex();
 
     blockApplySettings(true);
 
+    ui->freeDVMode->setCurrentIndex((int) m_settings.m_freeDVMode);
     ui->audioMute->setChecked(m_settings.m_audioMute);
     ui->playLoop->setChecked(m_settings.m_playLoop);
 
     // Prevent uncontrolled triggering of applyBandwidths
     ui->spanLog2->blockSignals(true);
     ui->spanLog2->setValue(5 - m_settings.m_spanLog2);
+    displayBandwidths(m_settings.m_spanLog2);
     ui->spanLog2->blockSignals(false);
 
     ui->gaugeInput->setChecked(m_settings.m_gaugeInputElseModem);
@@ -495,6 +519,15 @@ void FreeDVModGUI::displaySettings()
     ui->morseKeyer->setChecked(m_settings.m_modAFInput == FreeDVModSettings::FreeDVModInputAF::FreeDVModInputCWTone);
 
     blockApplySettings(false);
+}
+
+void FreeDVModGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void FreeDVModGUI::leaveEvent(QEvent*)

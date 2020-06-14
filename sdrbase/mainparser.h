@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -33,14 +34,19 @@ public:
 
     const QString& getServerAddress() const { return m_serverAddress; }
     uint16_t getServerPort() const { return m_serverPort; }
+    bool getMIMOSupport() const { return m_mimoSupport; }
+    const QString& getFFTWFWisdomFileName() const { return m_fftwfWindowFileName; }
 
 private:
     QString  m_serverAddress;
     uint16_t m_serverPort;
+    QString  m_fftwfWindowFileName;
+    bool m_mimoSupport; //!< obtained from major version
 
     QCommandLineParser m_parser;
     QCommandLineOption m_serverAddressOption;
     QCommandLineOption m_serverPortOption;
+    QCommandLineOption m_fftwfWisdomOption;
 };
 
 

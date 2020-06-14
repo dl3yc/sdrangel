@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -20,6 +21,7 @@
 #include <stdint.h>
 #include <SoapySDR/Device.hpp>
 
+#include "plugin/plugininterface.h"
 #include "export.h"
 #include "devicesoapysdrscan.h"
 
@@ -27,8 +29,9 @@ class DEVICES_API DeviceSoapySDR
 {
 public:
     static DeviceSoapySDR& instance();
-    SoapySDR::Device *openSoapySDR(uint32_t sequence);
+    SoapySDR::Device *openSoapySDR(uint32_t sequence, const QString& hardwareUserArguments);
     void closeSoapySdr(SoapySDR::Device *device);
+    void enumOriginDevices(const QString& hardwareId, PluginInterface::OriginDevices& originDevices);
 
     uint32_t getNbDevices() const { return m_scanner.getNbDevices(); }
     const std::vector<DeviceSoapySDRScan::SoapySDRDeviceEnum>& getDevicesEnumeration() const { return m_scanner.getDevicesEnumeration(); }
@@ -42,7 +45,7 @@ protected:
     ~DeviceSoapySDR();
 
 private:
-    SoapySDR::Device *openopenSoapySDRFromSequence(uint32_t sequence);
+    SoapySDR::Device *openopenSoapySDRFromSequence(uint32_t sequence, const QString& hardwareUserArguments);
     DeviceSoapySDRScan m_scanner;
 };
 

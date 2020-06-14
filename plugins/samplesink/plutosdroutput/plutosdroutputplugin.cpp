@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,12 +26,12 @@
 #include "plutosdroutputgui.h"
 #endif
 #include "plutosdroutputplugin.h"
-
-class DeviceSourceAPI;
+#include "plutosdroutputwebapiadapter.h"
 
 const PluginDescriptor PlutoSDROutputPlugin::m_pluginDescriptor = {
+    QString("PlutoSDR"),
 	QString("PlutoSDR Output"),
-	QString("4.4.3"),
+	QString("4.12.3"),
 	QString("(c) Edouard Griffiths, F4EXB"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -56,43 +57,51 @@ void PlutoSDROutputPlugin::initPlugin(PluginAPI* pluginAPI)
 	DevicePlutoSDR::instance(); // create singleton
 }
 
-PluginInterface::SamplingDevices PlutoSDROutputPlugin::enumSampleSinks()
+void PlutoSDROutputPlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
 {
-    DevicePlutoSDR::instance().scan();
-    std::vector<std::string> serials;
-    DevicePlutoSDR::instance().getSerials(serials);
+    if (listedHwIds.contains(m_hardwareID)) { // check if it was done
+        return;
+    }
 
-    std::vector<std::string>::const_iterator it = serials.begin();
-    int i;
+    DevicePlutoSDR::instance().enumOriginDevices(m_hardwareID, originDevices);
+    listedHwIds.append(m_hardwareID);
+}
+
+PluginInterface::SamplingDevices PlutoSDROutputPlugin::enumSampleSinks(const OriginDevices& originDevices)
+{
 	SamplingDevices result;
 
-	for (i = 0; it != serials.end(); ++it, ++i)
-	{
-	    QString serial_str = QString::fromLocal8Bit(it->c_str());
-	    QString displayedName(QString("PlutoSDR[%1] %2").arg(i).arg(serial_str));
-
-        result.append(SamplingDevice(displayedName,
-                m_hardwareID,
+	for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
+    {
+        if (it->hardwareId == m_hardwareID)
+        {
+            result.append(SamplingDevice(
+                it->displayableName,
+                it->hardwareId,
                 m_deviceTypeID,
-                serial_str,
-                i,
+                it->serial,
+                it->sequence,
                 PluginInterface::SamplingDevice::PhysicalDevice,
-                false,
+                PluginInterface::SamplingDevice::StreamSingleTx,
                 1,
-                0));
-
-        qDebug("PlutoSDROutputPlugin::enumSampleSources: enumerated PlutoSDR device #%d", i);
-	}
+                0
+            ));
+            qDebug("PlutoSDROutputPlugin::enumSampleSources: enumerated PlutoSDR device #%d", it->sequence);
+        }
+    }
 
 	return result;
 }
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* PlutoSDROutputPlugin::createSampleSinkPluginInstanceGUI(
-        const QString& sinkId __attribute((unused)),
-        QWidget **widget __attribute((unused)),
-        DeviceUISet *deviceUISet __attribute((unused)))
+        const QString& sinkId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sinkId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -114,7 +123,7 @@ PluginInstanceGUI* PlutoSDROutputPlugin::createSampleSinkPluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSink *PlutoSDROutputPlugin::createSampleSinkPluginInstanceOutput(const QString& sinkId, DeviceSinkAPI *deviceAPI)
+DeviceSampleSink *PlutoSDROutputPlugin::createSampleSinkPluginInstance(const QString& sinkId, DeviceAPI *deviceAPI)
 {
     if (sinkId == m_deviceTypeID)
     {
@@ -127,3 +136,7 @@ DeviceSampleSink *PlutoSDROutputPlugin::createSampleSinkPluginInstanceOutput(con
     }
 }
 
+DeviceWebAPIAdapter *PlutoSDROutputPlugin::createDeviceWebAPIAdapter() const
+{
+    return new PlutoSDROutputWebAPIAdapter();
+}

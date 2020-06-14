@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -27,7 +28,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
-class DeviceSourceAPI;
+class DeviceAPI;
 class AirspyThread;
 class FileRecord;
 
@@ -95,7 +96,7 @@ public:
         { }
     };
 
-	AirspyInput(DeviceSourceAPI *deviceAPI);
+	AirspyInput(DeviceAPI *deviceAPI);
 	virtual ~AirspyInput();
 	virtual void destroy();
 
@@ -109,6 +110,7 @@ public:
 	virtual void setMessageQueueToGUI(MessageQueue *queue) { m_guiMessageQueue = queue; }
 	virtual const QString& getDeviceDescription() const;
 	virtual int getSampleRate() const;
+    virtual void setSampleRate(int sampleRate) { (void) sampleRate; }
 	virtual quint64 getCenterFrequency() const;
 	virtual void setCenterFrequency(qint64 centerFrequency);
 	const std::vector<uint32_t>& getSampleRates() const { return m_sampleRates; }
@@ -138,11 +140,25 @@ public:
             SWGSDRangel::SWGDeviceReport& response,
             QString& errorMessage);
 
+    virtual int webapiActionsPost(
+            const QStringList& deviceActionsKeys,
+            SWGSDRangel::SWGDeviceActions& actions,
+            QString& errorMessage);
+
+    static void webapiFormatDeviceSettings(
+        SWGSDRangel::SWGDeviceSettings& response,
+        const AirspySettings& settings);
+
+    static void webapiUpdateDeviceSettings(
+            AirspySettings& settings,
+            const QStringList& deviceSettingsKeys,
+            SWGSDRangel::SWGDeviceSettings& response);
+
     static const qint64 loLowLimitFreq;
 	static const qint64 loHighLimitFreq;
 
 private:
-	DeviceSourceAPI *m_deviceAPI;
+	DeviceAPI *m_deviceAPI;
 	QMutex m_mutex;
 	AirspySettings m_settings;
 	struct airspy_device* m_dev;
@@ -159,7 +175,6 @@ private:
 	bool applySettings(const AirspySettings& settings, bool force);
 	struct airspy_device *open_airspy_from_sequence(int sequence);
 	void setDeviceCenterFrequency(quint64 freq);
-    void webapiFormatDeviceSettings(SWGSDRangel::SWGDeviceSettings& response, const AirspySettings& settings);
     void webapiFormatDeviceReport(SWGSDRangel::SWGDeviceReport& response);
     void webapiReverseSendSettings(QList<QString>& deviceSettingsKeys, const AirspySettings& settings, bool force);
     void webapiReverseSendStartStop(bool start);

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,11 +24,11 @@
 
 #include "xtrx_api.h"
 
-#include "dsp/samplesourcefifo.h"
 #include "dsp/interpolators.h"
 #include "xtrx/devicextrxshared.h"
 
 struct xtrx_dev;
+class SampleSourceFifo;
 
 class XTRXOutputThread : public QThread, public DeviceXTRXShared::ThreadInterface
 {
@@ -73,9 +74,9 @@ private:
 
     void run();
     unsigned int getNbFifos();
-    void callback(qint16* buf, qint32 len);
     void callbackSO(qint16* buf, qint32 len);
     void callbackMO(qint16* buf0, qint16* buf1, qint32 len);
+    void callbackPart(qint16* buf, SampleVector& data, unsigned int iBegin, unsigned int iEnd);
 };
 
 #endif /* PLUGINS_SAMPLESOURCE_XTRXOUTPUT_XTRXOUTPUTTHREAD_H_ */

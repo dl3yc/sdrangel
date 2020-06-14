@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -23,11 +24,13 @@
 
 #include "datvdemodgui.h"
 #include "datvdemodplugin.h"
+#include "datvdemodwebapiadapter.h"
 
 const PluginDescriptor DATVDemodPlugin::m_ptrPluginDescriptor =
 {
+    DATVDemod::m_channelId,
     QString("DATV Demodulator"),
-    QString("4.3.1"),
+    QString("4.12.3"),
     QString("(c) F4HKW for SDRAngel using LeanSDR framework (c) F4DAV"),
 	QString("https://github.com/f4exb/sdrangel"),
 	true,
@@ -36,7 +39,7 @@ const PluginDescriptor DATVDemodPlugin::m_ptrPluginDescriptor =
 
 DATVDemodPlugin::DATVDemodPlugin(QObject* ptrParent) :
     QObject(ptrParent),
-    m_ptrPluginAPI(NULL)
+    m_ptrPluginAPI(nullptr)
 {
 
 }
@@ -55,17 +58,22 @@ void DATVDemodPlugin::initPlugin(PluginAPI* ptrPluginAPI)
     m_ptrPluginAPI->registerRxChannel(DATVDemod::m_channelIdURI, DATVDemod::m_channelId, this);
 }
 
-PluginInstanceGUI* DATVDemodPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel)
+PluginInstanceGUI* DATVDemodPlugin::createRxChannelGUI(DeviceUISet *deviceUISet, BasebandSampleSink *rxChannel) const
 {
     return DATVDemodGUI::create(m_ptrPluginAPI, deviceUISet, rxChannel);
 }
 
-BasebandSampleSink* DATVDemodPlugin::createRxChannelBS(DeviceSourceAPI *deviceAPI)
+BasebandSampleSink* DATVDemodPlugin::createRxChannelBS(DeviceAPI *deviceAPI) const
 {
     return new DATVDemod(deviceAPI);
 }
 
-ChannelSinkAPI* DATVDemodPlugin::createRxChannelCS(DeviceSourceAPI *deviceAPI)
+ChannelAPI* DATVDemodPlugin::createRxChannelCS(DeviceAPI *deviceAPI) const
 {
     return new DATVDemod(deviceAPI);
+}
+
+ChannelWebAPIAdapter* DATVDemodPlugin::createChannelWebAPIAdapter() const
+{
+	return new DATVDemodWebAPIAdapter();
 }

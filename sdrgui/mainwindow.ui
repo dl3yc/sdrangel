@@ -64,7 +64,7 @@
      <x>0</x>
      <y>0</y>
      <width>1012</width>
-     <height>19</height>
+     <height>20</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
@@ -79,6 +79,7 @@
     </property>
     <addaction name="action_addSourceDevice"/>
     <addaction name="action_addSinkDevice"/>
+    <addaction name="action_addMIMODevice"/>
     <addaction name="action_removeLastDevice"/>
    </widget>
    <widget class="QMenu" name="menu_View">
@@ -116,10 +117,18 @@
     <property name="title">
      <string>&amp;Preferences</string>
     </property>
+    <widget class="QMenu" name="menuDevices">
+     <property name="title">
+      <string>Devices</string>
+     </property>
+     <addaction name="action_DeviceUserArguments"/>
+    </widget>
     <addaction name="action_Audio"/>
     <addaction name="action_Logging"/>
-    <addaction name="action_DV_Serial"/>
     <addaction name="action_My_Position"/>
+    <addaction name="action_AMBE"/>
+    <addaction name="action_LimeRFE"/>
+    <addaction name="menuDevices"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menu_View"/>
@@ -912,6 +921,32 @@
      <family>Liberation Sans</family>
      <pointsize>9</pointsize>
     </font>
+   </property>
+  </action>
+  <action name="action_addMIMODevice">
+   <property name="text">
+    <string>Add MIMO device set</string>
+   </property>
+   <property name="font">
+    <font>
+     <family>Liberation Sans</family>
+     <pointsize>9</pointsize>
+    </font>
+   </property>
+  </action>
+  <action name="action_DeviceUserArguments">
+   <property name="text">
+    <string>User arguments</string>
+   </property>
+  </action>
+  <action name="action_AMBE">
+   <property name="text">
+    <string>AMBE</string>
+   </property>
+  </action>
+  <action name="action_LimeRFE">
+   <property name="text">
+    <string>LimeRFE</string>
    </property>
   </action>
   <zorder>presetDock</zorder>

@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -35,6 +36,15 @@ ArgInfoGUI::ArgInfoGUI(ArgInfoType type, ArgInfoValueType valueType, QWidget *pa
     ui->setupUi(this);
     QHBoxLayout *layout = ui->argLayout;
 
+    if ((m_valueType == ArgInfoValueInt) || (m_valueType == ArgInfoValueFloat))
+    {
+        if (m_type == ArgInfoContinuous) {
+            ui->argEdit->setAlignment(Qt::AlignRight);
+        } else if (m_type == ArgInfoDiscrete) {
+            ui->argCombo->setLayoutDirection(Qt::RightToLeft);
+        }
+    }
+
     if (m_type != ArgInfoBinary)
     {
         layout->removeWidget(ui->argCheck);
@@ -51,15 +61,6 @@ ArgInfoGUI::ArgInfoGUI(ArgInfoType type, ArgInfoValueType valueType, QWidget *pa
     {
         layout->removeWidget(ui->argCombo);
         delete ui->argCombo;
-    }
-
-    if ((m_valueType == ArgInfoValueInt) || (m_valueType == ArgInfoValueFloat))
-    {
-        if (m_type == ArgInfoContinuous) {
-            ui->argEdit->setAlignment(Qt::AlignRight);
-        } else if (m_type == ArgInfoDiscrete) {
-            ui->argCombo->setLayoutDirection(Qt::RightToLeft);
-        }
     }
 }
 

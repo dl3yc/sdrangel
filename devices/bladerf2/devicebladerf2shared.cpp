@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,9 +19,7 @@
 
 MESSAGE_CLASS_DEFINITION(DeviceBladeRF2Shared::MsgReportBuddyChange, Message)
 
-const float  DeviceBladeRF2Shared::m_sampleFifoLengthInSeconds = 0.25;
-const int    DeviceBladeRF2Shared::m_sampleFifoMinSize = 75000; // 300 kS/s knee
-const int    DeviceBladeRF2Shared::m_sampleFifoMinSize32 = 150000; // Fixed for interpolation by 32
+const unsigned int DeviceBladeRF2Shared::m_sampleFifoMinRate = 48000;
 
 DeviceBladeRF2Shared::DeviceBladeRF2Shared() :
     m_dev(0),

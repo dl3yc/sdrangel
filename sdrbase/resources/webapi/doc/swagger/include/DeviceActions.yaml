@@ -1,0 +1,52 @@
+DeviceActions:
+  description: Base device actions. Only the device actions corresponding to the device specified in the deviceHwType field is or should be present.
+  discriminator: deviceHwType
+  required:
+    - deviceHwType
+    - direction
+  properties:
+    deviceHwType:
+      description: Device hardware type code
+      type: string
+    direction:
+      description: 0 for Rx only, 1 for Tx only or 2 for any number and direction (default 0)
+      type: integer
+    originatorIndex:
+      description: Optional for reverse API. This is the device set index from where the message comes from.
+      type: integer
+    airspyActions:
+      $ref: "/doc/swagger/include/Airspy.yaml#/AirspyActions"
+    airspyHFActions:
+      $ref: "/doc/swagger/include/AirspyHF.yaml#/AirspyHFActions"
+    bladeRF1InputActions:
+      $ref: "/doc/swagger/include/BladeRF1.yaml#/BladeRF1InputActions"
+    bladeRF2InputActions:
+      $ref: "/doc/swagger/include/BladeRF2.yaml#/BladeRF2InputActions"
+    fcdProActions:
+      $ref: "/doc/swagger/include/FCDPro.yaml#/FCDProActions"
+    fcdProPlusActions:
+      $ref: "/doc/swagger/include/FCDProPlus.yaml#/FCDProPlusActions"
+    hackRFInputActions:
+      $ref: "/doc/swagger/include/HackRF.yaml#/HackRFInputActions"
+    kiwiSDRActions:
+      $ref: "/doc/swagger/include/KiwiSDR.yaml#/KiwiSDRActions"
+    limeSdrInputActions:
+      $ref: "/doc/swagger/include/LimeSdr.yaml#/LimeSdrInputActions"
+    localInputActions:
+      $ref: "/doc/swagger/include/LocalInput.yaml#/LocalInputActions"
+    perseusActions:
+      $ref: "/doc/swagger/include/Perseus.yaml#/PerseusActions"
+    plutoSdrInputActions:
+      $ref: "/doc/swagger/include/PlutoSdr.yaml#/PlutoSdrInputActions"
+    remoteInputActions:
+      $ref: "/doc/swagger/include/RemoteInput.yaml#/RemoteInputActions"
+    rtlSdrActions:
+      $ref: "/doc/swagger/include/RtlSdr.yaml#/RtlSdrActions"
+    sdrPlayActions:
+      $ref: "/doc/swagger/include/SDRPlay.yaml#/SDRPlayActions"
+    soapySDRInputActions:
+      $ref: "/doc/swagger/include/SoapySDR.yaml#/SoapySDRInputActions"
+    testSourceActions:
+      $ref: "/doc/swagger/include/TestSource.yaml#/TestSourceActions"
+    xtrxInputActions:
+      $ref: "/doc/swagger/include/Xtrx.yaml#/XtrxInputActions"

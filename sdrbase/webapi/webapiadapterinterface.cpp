@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -19,6 +20,7 @@
 #include "webapiadapterinterface.h"
 
 QString WebAPIAdapterInterface::instanceSummaryURL = "/sdrangel";
+QString WebAPIAdapterInterface::instanceConfigURL = "/sdrangel/config";
 QString WebAPIAdapterInterface::instanceDevicesURL = "/sdrangel/devices";
 QString WebAPIAdapterInterface::instanceChannelsURL = "/sdrangel/channels";
 QString WebAPIAdapterInterface::instanceLoggingURL = "/sdrangel/logging";
@@ -28,7 +30,12 @@ QString WebAPIAdapterInterface::instanceAudioOutputParametersURL = "/sdrangel/au
 QString WebAPIAdapterInterface::instanceAudioInputCleanupURL = "/sdrangel/audio/input/cleanup";
 QString WebAPIAdapterInterface::instanceAudioOutputCleanupURL = "/sdrangel/audio/output/cleanup";
 QString WebAPIAdapterInterface::instanceLocationURL = "/sdrangel/location";
-QString WebAPIAdapterInterface::instanceDVSerialURL = "/sdrangel/dvserial";
+QString WebAPIAdapterInterface::instanceAMBESerialURL = "/sdrangel/ambe/serial";
+QString WebAPIAdapterInterface::instanceAMBEDevicesURL = "/sdrangel/ambe/devices";
+QString WebAPIAdapterInterface::instanceLimeRFESerialURL = "/sdrangel/limerfe/serial";
+QString WebAPIAdapterInterface::instanceLimeRFEConfigURL = "/sdrangel/limerfe/config";
+QString WebAPIAdapterInterface::instanceLimeRFERunURL = "/sdrangel/limerfe/run";
+QString WebAPIAdapterInterface::instanceLimeRFEPowerURL = "/sdrangel/limerfe/power";
 QString WebAPIAdapterInterface::instancePresetsURL = "/sdrangel/presets";
 QString WebAPIAdapterInterface::instancePresetURL = "/sdrangel/preset";
 QString WebAPIAdapterInterface::instancePresetFileURL = "/sdrangel/preset/file";
@@ -39,10 +46,96 @@ std::regex WebAPIAdapterInterface::devicesetURLRe("^/sdrangel/deviceset/([0-9]{1
 std::regex WebAPIAdapterInterface::devicesetFocusURLRe("^/sdrangel/deviceset/([0-9]{1,2})/focus$");
 std::regex WebAPIAdapterInterface::devicesetDeviceURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device$");
 std::regex WebAPIAdapterInterface::devicesetDeviceSettingsURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device/settings$");
-std::regex WebAPIAdapterInterface::devicesetDeviceRunURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device/run");
+std::regex WebAPIAdapterInterface::devicesetDeviceRunURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device/run$");
+std::regex WebAPIAdapterInterface::devicesetDeviceSubsystemRunURLRe("^/sdrangel/deviceset/([0-9]{1,2})/subdevice/([0-9]{1,2})/run$");
 std::regex WebAPIAdapterInterface::devicesetDeviceReportURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device/report$");
+std::regex WebAPIAdapterInterface::devicesetDeviceActionsURLRe("^/sdrangel/deviceset/([0-9]{1,2})/device/actions$");
 std::regex WebAPIAdapterInterface::devicesetChannelsReportURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channels/report$");
 std::regex WebAPIAdapterInterface::devicesetChannelURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channel$");
 std::regex WebAPIAdapterInterface::devicesetChannelIndexURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channel/([0-9]{1,2})$");
 std::regex WebAPIAdapterInterface::devicesetChannelSettingsURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channel/([0-9]{1,2})/settings$");
 std::regex WebAPIAdapterInterface::devicesetChannelReportURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channel/([0-9]{1,2})/report");
+std::regex WebAPIAdapterInterface::devicesetChannelActionsURLRe("^/sdrangel/deviceset/([0-9]{1,2})/channel/([0-9]{1,2})/actions");
+
+void WebAPIAdapterInterface::ConfigKeys::debug() const
+{
+    qDebug("WebAPIAdapterInterface::ConfigKeys::debug");
+
+    qDebug("preferences:");
+    foreach(QString preferenceKey, m_preferencesKeys) {
+        qDebug("  %s", qPrintable(preferenceKey));
+    }
+
+    qDebug("commands:");
+    foreach(CommandKeys commandKeys, m_commandKeys)
+    {
+        qDebug("  {");
+        foreach(QString commandKey, commandKeys.m_keys) {
+            qDebug("    %s", qPrintable(commandKey));
+        }
+        qDebug("  }");
+    }
+
+    qDebug("presets:");
+    foreach(PresetKeys presetKeys, m_presetKeys)
+    {
+        qDebug("  {");
+        foreach(QString presetKey, presetKeys.m_keys) {
+            qDebug("    %s", qPrintable(presetKey));
+        }
+        qDebug("    spectrumConfig:");
+        foreach(QString spectrumKey, presetKeys.m_spectrumKeys) {
+            qDebug("      %s", qPrintable(spectrumKey));
+        }
+        qDebug("    deviceConfigs:");
+        foreach(DeviceKeys deviceKeys, presetKeys.m_devicesKeys)
+        {
+            qDebug("      {");
+            qDebug("        config:");
+            foreach(QString deviceKey, deviceKeys.m_deviceKeys) {
+                qDebug("          %s", qPrintable(deviceKey));
+            }
+            qDebug("      }");
+        }
+        qDebug("    channelConfigs");
+        foreach(ChannelKeys channelKeys, presetKeys.m_channelsKeys)
+        {
+            qDebug("      {");
+            qDebug("        config:");
+            foreach(QString channelKey, channelKeys.m_channelKeys) {
+                qDebug("          %s", qPrintable(channelKey));
+            }
+            qDebug("      }");
+        }
+        qDebug("  }");
+    }
+
+    qDebug("workingPreset:");
+    foreach(QString presetKey, m_workingPresetKeys.m_keys) {
+        qDebug("  %s", qPrintable(presetKey));
+    }
+    qDebug("  spectrumConfig:");
+    foreach(QString spectrumKey, m_workingPresetKeys.m_spectrumKeys) {
+        qDebug("    %s", qPrintable(spectrumKey));
+    }
+    qDebug("  deviceConfigs:");
+    foreach(DeviceKeys deviceKeys, m_workingPresetKeys.m_devicesKeys)
+    {
+        qDebug("    {");
+        qDebug("      config:");
+        foreach(QString deviceKey, deviceKeys.m_deviceKeys) {
+            qDebug("        %s", qPrintable(deviceKey));
+        }
+        qDebug("    }");
+    }
+    qDebug("  channelConfigs:");
+    foreach(ChannelKeys channelKeys, m_workingPresetKeys.m_channelsKeys)
+    {
+        qDebug("    {");
+        qDebug("      config:");
+        foreach(QString channelKey, channelKeys.m_channelKeys) {
+            qDebug("        %s", qPrintable(channelKey));
+        }
+        qDebug("    }");
+    }
+}

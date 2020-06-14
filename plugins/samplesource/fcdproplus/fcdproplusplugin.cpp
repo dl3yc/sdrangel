@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -18,8 +19,7 @@
 #include "plugin/pluginapi.h"
 #include "util/simpleserializer.h"
 #include "fcdproplusplugin.h"
-
-#include <device/devicesourceapi.h>
+#include "fcdpropluswebapiadapter.h"
 
 #ifdef SERVER_MODE
 #include "fcdproplusinput.h"
@@ -29,6 +29,7 @@
 #include "fcdtraits.h"
 
 const PluginDescriptor FCDProPlusPlugin::m_pluginDescriptor = {
+    QString("FCDProPlus"),
 	QString(fcd_traits<ProPlus>::pluginDisplayedName),
 	QString(fcd_traits<ProPlus>::pluginVersion),
 	QString("(c) Edouard Griffiths, F4EXB"),
@@ -54,9 +55,11 @@ void FCDProPlusPlugin::initPlugin(PluginAPI* pluginAPI)
 	pluginAPI->registerSampleSource(fcd_traits<ProPlus>::interfaceIID, this);
 }
 
-PluginInterface::SamplingDevices FCDProPlusPlugin::enumSampleSources()
+void FCDProPlusPlugin::enumOriginDevices(QStringList& listedHwIds, OriginDevices& originDevices)
 {
-	SamplingDevices result;
+    if (listedHwIds.contains(fcd_traits<ProPlus>::hardwareID)) { // check if it was done
+        return;
+    }
 
 	int i = 0;
 	struct hid_device_info *device_info = hid_enumerate(fcd_traits<ProPlus>::vendorId, fcd_traits<ProPlus>::productId);
@@ -64,31 +67,58 @@ PluginInterface::SamplingDevices FCDProPlusPlugin::enumSampleSources()
 	while (device_info != 0)
 	{
 		QString serialNumber = QString::fromWCharArray(device_info->serial_number);
-		QString displayedName(QString("%1[%2] %3").arg(fcd_traits<ProPlus>::displayedName).arg(i).arg(serialNumber));
+		QString displayableName(QString("%1[%2] %3").arg(fcd_traits<ProPlus>::displayedName).arg(i).arg(serialNumber));
 
-		result.append(SamplingDevice(displayedName,
-		        fcd_traits<ProPlus>::hardwareID,
-				fcd_traits<ProPlus>::interfaceIID,
-				serialNumber,
-				i,
-				PluginInterface::SamplingDevice::PhysicalDevice,
-				true,
-				1,
-				0));
+        originDevices.append(OriginDevice(
+            displayableName,
+            fcd_traits<Pro>::hardwareID,
+            serialNumber,
+            i,
+            1, // nb Rx
+            0  // nb Tx
+        ));
 
 		device_info = device_info->next;
 		i++;
 	}
+
+    listedHwIds.append(fcd_traits<ProPlus>::hardwareID);
+}
+
+PluginInterface::SamplingDevices FCDProPlusPlugin::enumSampleSources(const OriginDevices& originDevices)
+{
+	SamplingDevices result;
+
+	for (OriginDevices::const_iterator it = originDevices.begin(); it != originDevices.end(); ++it)
+    {
+        if (it->hardwareId == fcd_traits<ProPlus>::hardwareID)
+        {
+            result.append(SamplingDevice(
+                it->displayableName,
+                fcd_traits<ProPlus>::hardwareID,
+                fcd_traits<ProPlus>::interfaceIID,
+                it->serial,
+                it->sequence,
+                PluginInterface::SamplingDevice::PhysicalDevice,
+                PluginInterface::SamplingDevice::StreamSingleRx,
+                1,
+                0
+            ));
+        }
+    }
 
 	return result;
 }
 
 #ifdef SERVER_MODE
 PluginInstanceGUI* FCDProPlusPlugin::createSampleSourcePluginInstanceGUI(
-        const QString& sourceId __attribute__((unused)),
-        QWidget **widget __attribute__((unused)),
-        DeviceUISet *deviceUISet __attribute__((unused)))
+        const QString& sourceId,
+        QWidget **widget,
+        DeviceUISet *deviceUISet)
 {
+    (void) sourceId;
+    (void) widget;
+    (void) deviceUISet;
     return 0;
 }
 #else
@@ -110,7 +140,7 @@ PluginInstanceGUI* FCDProPlusPlugin::createSampleSourcePluginInstanceGUI(
 }
 #endif
 
-DeviceSampleSource *FCDProPlusPlugin::createSampleSourcePluginInstanceInput(const QString& sourceId, DeviceSourceAPI *deviceAPI)
+DeviceSampleSource *FCDProPlusPlugin::createSampleSourcePluginInstance(const QString& sourceId, DeviceAPI *deviceAPI)
 {
     if(sourceId == fcd_traits<ProPlus>::interfaceIID)
     {
@@ -121,4 +151,9 @@ DeviceSampleSource *FCDProPlusPlugin::createSampleSourcePluginInstanceInput(cons
     {
         return 0;
     }
+}
+
+DeviceWebAPIAdapter *FCDProPlusPlugin::createDeviceWebAPIAdapter() const
+{
+    return new FCDProPlusWebAPIAdapter();
 }

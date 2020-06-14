@@ -1,17 +1,13 @@
 ///////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2018 F4EXB                                                      //
+// Copyright (C) 2019 F4EXB                                                      //
 // written by Edouard Griffiths                                                  //
 //                                                                               //
-// FFT based cross correlation                                                   //
-//                                                                               //
-// See: http://liquidsdr.org/blog/pll-howto/                                     //
-// Fixed filter registers saturation                                             //
-// Added order for PSK locking. This brilliant idea actually comes from this     //
-// post: https://www.dsprelated.com/showthread/comp.dsp/36356-1.php              //
+// FFT based cross correlation. Uses FFTW/Kiss engine.                           //
 //                                                                               //
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -22,12 +18,15 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#ifndef SDRBASE_DSP_FFTCORR_H_
-#define SDRBASE_DSP_FFTCORR_H_
+#ifndef SDRBASE_DSP_FFTCORR2_H_
+#define SDRBASE_DSP_FFTCORR2_H_
 
 #include <complex>
-#include "gfft.h"
+
+#include "dsp/fftwindow.h"
 #include "export.h"
+
+class FFTEngine;
 
 class SDRBASE_API fftcorr {
 public:
@@ -42,8 +41,13 @@ private:
     void init_fft();
     int flen;  //!< FFT length
     int flen2; //!< half FFT length
-    g_fft<float> *fftA;
-    g_fft<float> *fftB;
+    FFTEngine *fftA;
+    FFTEngine *fftB;
+    FFTEngine *fftInvA;
+    unsigned int fftASequence;
+    unsigned int fftBSequence;
+    unsigned int fftInvASequence;
+    FFTWindow m_window;
     cmplx *dataA;  // from A input
     cmplx *dataB;  // from B input
     cmplx *dataBj; // conjugate of B
@@ -54,4 +58,4 @@ private:
 };
 
 
-#endif /* SDRBASE_DSP_FFTCORR_H_ */
+#endif /* SDRBASE_DSP_FFTCORR2_H_ */

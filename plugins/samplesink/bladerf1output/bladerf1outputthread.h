@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -21,10 +22,11 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <libbladeRF.h>
-#include "dsp/samplesourcefifo.h"
 #include "dsp/interpolators.h"
 
 #define BLADERFOUTPUT_BLOCKSIZE (1<<16)
+
+class SampleSourceFifo;
 
 class Bladerf1OutputThread : public QThread {
 	Q_OBJECT
@@ -53,6 +55,7 @@ private:
 
 	void run();
 	void callback(qint16* buf, qint32 len);
+    void callbackPart(qint16* buf, SampleVector& data, unsigned int iBegin, unsigned int iEnd);
 };
 
 #endif // INCLUDE_BLADERFOUTPUTTHREAD_H

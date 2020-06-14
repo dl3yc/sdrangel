@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -15,7 +16,6 @@
 // along with this program. If not, see <http://www.gnu.org/licenses/>.          //
 ///////////////////////////////////////////////////////////////////////////////////
 
-#include "device/devicesourceapi.h"
 #include "device/deviceuiset.h"
 #include "plugin/pluginapi.h"
 #include "dsp/spectrumvis.h"
@@ -23,6 +23,7 @@
 #include "util/simpleserializer.h"
 #include "util/db.h"
 #include "gui/basicchannelsettingsdialog.h"
+#include "gui/devicestreamselectiondialog.h"
 #include "ui_udpsinkgui.h"
 #include "mainwindow.h"
 
@@ -90,9 +91,9 @@ bool UDPSinkGUI::deserialize(const QByteArray& data)
 
 bool UDPSinkGUI::handleMessage(const Message& message )
 {
-    if (UDPSink::MsgConfigureUDPSource::match(message))
+    if (UDPSink::MsgConfigureUDPSink::match(message))
     {
-        const UDPSink::MsgConfigureUDPSource& cfg = (UDPSink::MsgConfigureUDPSource&) message;
+        const UDPSink::MsgConfigureUDPSink& cfg = (UDPSink::MsgConfigureUDPSink&) message;
         m_settings = cfg.getSettings();
         blockApplySettings(true);
         displaySettings();
@@ -170,9 +171,9 @@ UDPSinkGUI::UDPSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandS
     connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(onMenuDialogCalled(const QPoint &)));
 	setAttribute(Qt::WA_DeleteOnClose, true);
 
-	m_spectrumVis = new SpectrumVis(SDR_RX_SCALEF, ui->glSpectrum);
 	m_udpSink = (UDPSink*) rxChannel; //new UDPSrc(m_deviceUISet->m_deviceSourceAPI);
-	m_udpSink->setSpectrum(m_spectrumVis);
+    m_spectrumVis = m_udpSink->getSpectrumVis();
+	m_spectrumVis->setGLSpectrum(ui->glSpectrum);
 	m_udpSink->setMessageQueueToGUI(getInputMessageQueue());
 
 	ui->fmDeviation->setEnabled(false);
@@ -186,13 +187,16 @@ UDPSinkGUI::UDPSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandS
 	ui->glSpectrum->setSampleRate(ui->sampleRate->text().toInt());
 	ui->glSpectrum->setDisplayWaterfall(true);
 	ui->glSpectrum->setDisplayMaxHold(true);
-	m_spectrumVis->configure(m_spectrumVis->getInputMessageQueue(),
-	        64, // FFT size
-	        10, // overlapping %
-	        0,  // number of averaging samples
-	        0,  // no averaging
-	        FFTWindow::BlackmanHarris,
-	        false); // logarithmic scale
+	m_spectrumVis->configure(
+        64, // FFT size
+        0, // Ref level (dB)
+        100, // Power range (dB)
+        10, // overlapping %
+        0,  // number of averaging samples
+        SpectrumVis::AvgModeNone,  // no averaging
+        FFTWindow::BlackmanHarris,
+        false // logarithmic scale
+    );
 
 	ui->glSpectrum->connectTimer(MainWindow::getInstance()->getMasterTimer());
 	connect(&MainWindow::getInstance()->getMasterTimer(), SIGNAL(timeout()), this, SLOT(tick()));
@@ -218,7 +222,7 @@ UDPSinkGUI::UDPSinkGUI(PluginAPI* pluginAPI, DeviceUISet *deviceUISet, BasebandS
     connect(&m_channelMarker, SIGNAL(highlightedByCursor()), this, SLOT(channelMarkerHighlightedByCursor()));
     connect(getInputMessageQueue(), SIGNAL(messageEnqueued()), this, SLOT(handleSourceMessages()));
 
-	ui->spectrumGUI->setBuddies(m_spectrumVis->getInputMessageQueue(), m_spectrumVis, ui->glSpectrum);
+	ui->spectrumGUI->setBuddies(m_spectrumVis, ui->glSpectrum);
 
 	displaySettings();
 	applySettingsImmediate(true);
@@ -229,7 +233,6 @@ UDPSinkGUI::~UDPSinkGUI()
 {
     m_deviceUISet->removeRxChannelInstance(this);
 	delete m_udpSink; // TODO: check this: when the GUI closes it has to delete the demodulator
-	delete m_spectrumVis;
 	delete ui;
 }
 
@@ -284,9 +287,20 @@ void UDPSinkGUI::displaySettings()
     ui->applyBtn->setEnabled(false);
     ui->applyBtn->setStyleSheet("QPushButton { background:rgb(79,79,79); }");
 
+    displayStreamIndex();
+
     blockApplySettings(false);
 
     ui->glSpectrum->setSampleRate(m_settings.m_outputSampleRate);
+}
+
+void UDPSinkGUI::displayStreamIndex()
+{
+    if (m_deviceUISet->m_deviceMIMOEngine) {
+        setStreamIndicator(tr("%1").arg(m_settings.m_streamIndex));
+    } else {
+        setStreamIndicator("S"); // single channel indicator
+    }
 }
 
 void UDPSinkGUI::setSampleFormatIndex(const UDPSinkSettings::SampleFormat& sampleFormat)
@@ -391,7 +405,7 @@ void UDPSinkGUI::applySettingsImmediate(bool force)
 {
 	if (m_doApplySettings)
 	{
-        UDPSink::MsgConfigureUDPSource* message = UDPSink::MsgConfigureUDPSource::create( m_settings, force);
+        UDPSink::MsgConfigureUDPSink* message = UDPSink::MsgConfigureUDPSink::create( m_settings, force);
         m_udpSink->getInputMessageQueue()->push(message);
 	}
 }
@@ -400,11 +414,7 @@ void UDPSinkGUI::applySettings(bool force)
 {
 	if (m_doApplySettings)
 	{
-        UDPSink::MsgConfigureChannelizer* channelConfigMsg = UDPSink::MsgConfigureChannelizer::create(
-                m_settings.m_outputSampleRate, m_channelMarker.getCenterFrequency());
-        m_udpSink->getInputMessageQueue()->push(channelConfigMsg);
-
-        UDPSink::MsgConfigureUDPSource* message = UDPSink::MsgConfigureUDPSource::create( m_settings, force);
+        UDPSink::MsgConfigureUDPSink* message = UDPSink::MsgConfigureUDPSink::create( m_settings, force);
         m_udpSink->getInputMessageQueue()->push(message);
 
 		ui->applyBtn->setEnabled(false);
@@ -606,37 +616,55 @@ void UDPSinkGUI::on_squelchGate_valueChanged(int value)
 
 void UDPSinkGUI::onWidgetRolled(QWidget* widget, bool rollDown)
 {
-	if ((widget == ui->spectrumBox) && (m_udpSink != 0))
-	{
-		m_udpSink->setSpectrum(m_udpSink->getInputMessageQueue(), rollDown);
+	if ((widget == ui->spectrumBox) && (m_udpSink)) {
+        m_udpSink->enableSpectrum(rollDown);
 	}
 }
 
 void UDPSinkGUI::onMenuDialogCalled(const QPoint &p)
 {
-    BasicChannelSettingsDialog dialog(&m_channelMarker, this);
-    dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
-    dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
-    dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
-    dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
-    dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
+    if (m_contextMenuType == ContextMenuChannelSettings)
+    {
+        BasicChannelSettingsDialog dialog(&m_channelMarker, this);
+        dialog.setUseReverseAPI(m_settings.m_useReverseAPI);
+        dialog.setReverseAPIAddress(m_settings.m_reverseAPIAddress);
+        dialog.setReverseAPIPort(m_settings.m_reverseAPIPort);
+        dialog.setReverseAPIDeviceIndex(m_settings.m_reverseAPIDeviceIndex);
+        dialog.setReverseAPIChannelIndex(m_settings.m_reverseAPIChannelIndex);
 
-    dialog.move(p);
-    dialog.exec();
+        dialog.move(p);
+        dialog.exec();
 
-    m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
-    m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
-    m_settings.m_title = m_channelMarker.getTitle();
-    m_settings.m_useReverseAPI = dialog.useReverseAPI();
-    m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
-    m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
-    m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
-    m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
+        m_settings.m_inputFrequencyOffset = m_channelMarker.getCenterFrequency();
+        m_settings.m_rgbColor = m_channelMarker.getColor().rgb();
+        m_settings.m_title = m_channelMarker.getTitle();
+        m_settings.m_useReverseAPI = dialog.useReverseAPI();
+        m_settings.m_reverseAPIAddress = dialog.getReverseAPIAddress();
+        m_settings.m_reverseAPIPort = dialog.getReverseAPIPort();
+        m_settings.m_reverseAPIDeviceIndex = dialog.getReverseAPIDeviceIndex();
+        m_settings.m_reverseAPIChannelIndex = dialog.getReverseAPIChannelIndex();
 
-    setWindowTitle(m_settings.m_title);
-    setTitleColor(m_settings.m_rgbColor);
+        setWindowTitle(m_settings.m_title);
+        setTitleColor(m_settings.m_rgbColor);
 
-    applySettingsImmediate();
+        applySettingsImmediate();
+    }
+    else if ((m_contextMenuType == ContextMenuStreamSettings) && (m_deviceUISet->m_deviceMIMOEngine))
+    {
+        DeviceStreamSelectionDialog dialog(this);
+        dialog.setNumberOfStreams(m_udpSink->getNumberOfDeviceStreams());
+        dialog.setStreamIndex(m_settings.m_streamIndex);
+        dialog.move(p);
+        dialog.exec();
+
+        m_settings.m_streamIndex = dialog.getSelectedStreamIndex();
+        m_channelMarker.clearStreamIndexes();
+        m_channelMarker.addStreamIndex(m_settings.m_streamIndex);
+        displayStreamIndex();
+        applySettings();
+    }
+
+    resetContextMenuType();
 }
 
 void UDPSinkGUI::leaveEvent(QEvent*)

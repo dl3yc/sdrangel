@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -72,11 +73,6 @@ void DeviceSoapySDRScan::scan()
                 m_deviceEnums.back().m_label = QString("%1-%2").arg(m_deviceEnums.back().m_driverName).arg(deviceSeq);
             }
 
-            qDebug("DeviceSoapySDRScan::scan: %s #%u %s",
-                    m_deviceEnums.back().m_driverName.toStdString().c_str(),
-                    deviceSeq,
-                    m_deviceEnums.back().m_label.toStdString().c_str());
-
             if ((kargIt = kit->find("serial")) != kit->end())
             {
                 m_deviceEnums.back().m_idKey = QString(kargIt->first.c_str());
@@ -92,6 +88,13 @@ void DeviceSoapySDRScan::scan()
                 m_deviceEnums.back().m_idKey = QString(kargIt->first.c_str());
                 m_deviceEnums.back().m_idValue = QString(kargIt->second.c_str());
             }
+
+            qDebug("DeviceSoapySDRScan::scan: %s #%u %s id: %s=%s",
+                    m_deviceEnums.back().m_driverName.toStdString().c_str(),
+                    deviceSeq,
+                    m_deviceEnums.back().m_label.toStdString().c_str(),
+                    m_deviceEnums.back().m_idKey.toStdString().c_str(),
+                    m_deviceEnums.back().m_idValue.toStdString().c_str());
 
             // access the device to get the number of Rx and Tx channels and at the same time probe
             // whether it is available for Soapy

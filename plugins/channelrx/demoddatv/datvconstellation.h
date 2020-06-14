@@ -6,6 +6,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -24,40 +25,123 @@
 #include "leansdr/framework.h"
 #include "gui/tvscreen.h"
 
-namespace leansdr
-{
+namespace leansdr {
 
 static const int DEFAULT_GUI_DECIMATION = 64;
+
+static inline cstln_lut<eucl_ss, 256> * make_dvbs_constellation(cstln_lut<eucl_ss, 256>::predef c,
+        code_rate r)
+{
+    float gamma1 = 1, gamma2 = 1, gamma3 = 1;
+    switch (c)
+    {
+    case cstln_lut<eucl_ss, 256>::APSK16:
+        // EN 302 307, section 5.4.3, Table 9
+        switch (r)
+        {
+        case FEC23:
+        case FEC46:
+            gamma1 = 3.15;
+            break;
+        case FEC34:
+            gamma1 = 2.85;
+            break;
+        case FEC45:
+            gamma1 = 2.75;
+            break;
+        case FEC56:
+            gamma1 = 2.70;
+            break;
+        case FEC89:
+            gamma1 = 2.60;
+            break;
+        case FEC910:
+            gamma1 = 2.57;
+            break;
+        default:
+            fail("cstln_lut<256>::make_dvbs_constellation: Code rate not supported with APSK16");
+            return 0;
+        }
+        break;
+    case cstln_lut<eucl_ss, 256>::APSK32:
+        // EN 302 307, section 5.4.4, Table 10
+        switch (r)
+        {
+        case FEC34:
+            gamma1 = 2.84;
+            gamma2 = 5.27;
+            break;
+        case FEC45:
+            gamma1 = 2.72;
+            gamma2 = 4.87;
+            break;
+        case FEC56:
+            gamma1 = 2.64;
+            gamma2 = 4.64;
+            break;
+        case FEC89:
+            gamma1 = 2.54;
+            gamma2 = 4.33;
+            break;
+        case FEC910:
+            gamma1 = 2.53;
+            gamma2 = 4.30;
+            break;
+        default:
+            fail("cstln_lut<eucl_ss, 256>::make_dvbs_constellation: Code rate not supported with APSK32");
+            return 0;
+        }
+        break;
+    case cstln_lut<eucl_ss, 256>::APSK64E:
+        // EN 302 307-2, section 5.4.5, Table 13f
+        gamma1 = 2.4;
+        gamma2 = 4.3;
+        gamma3 = 7;
+        break;
+    default:
+        break;
+    }
+    cstln_lut<eucl_ss, 256> *newCstln =  new cstln_lut<eucl_ss, 256>(c, 10, gamma1, gamma2, gamma3);
+    newCstln->m_rateCode = (int) r;
+    newCstln->m_typeCode = (int) c;
+    newCstln->m_setByModcod = false;
+    return newCstln;
+}
 
 template<typename T> struct datvconstellation: runnable
 {
     T xymin, xymax;
     unsigned long decimation;
-    unsigned long pixels_per_frame;
-    cstln_lut<256> **cstln;  // Optional ptr to optional constellation
+    long pixels_per_frame;
+    cstln_lut<eucl_ss, 256> **cstln;  // Optional ptr to optional constellation
     TVScreen *m_objDATVScreen;
     pipereader<complex<T> > in;
     unsigned long phase;
     std::vector<int> cstln_rows;
     std::vector<int> cstln_cols;
 
-    datvconstellation(scheduler *sch, pipebuf<complex<T> > &_in, T _xymin, T _xymax, const char *_name = 0, TVScreen *objDATVScreen = 0) :
-            runnable(sch, _name ? _name : _in.name),
-            xymin(_xymin),
-            xymax(_xymax),
-            decimation(DEFAULT_GUI_DECIMATION),
-            pixels_per_frame(1024),
-            cstln(0),
-            m_objDATVScreen(objDATVScreen),
-            in(_in),
-            phase(0)
+    datvconstellation(
+            scheduler *sch,
+            pipebuf<complex<T> > &_in,
+            T _xymin,
+            T _xymax,
+            const char *_name = nullptr,
+            TVScreen *objDATVScreen = nullptr) :
+        runnable(sch, _name ? _name : _in.name),
+        xymin(_xymin),
+        xymax(_xymax),
+        decimation(DEFAULT_GUI_DECIMATION),
+        pixels_per_frame(1024),
+        cstln(0),
+        m_objDATVScreen(objDATVScreen),
+        in(_in),
+        phase(0)
     {
     }
 
     void run()
     {
         //Symbols
-
         while (in.readable() >= pixels_per_frame)
         {
             if ((!phase) && m_objDATVScreen)
@@ -69,17 +153,18 @@ template<typename T> struct datvconstellation: runnable
                 for (; p < pend; ++p)
                 {
                     m_objDATVScreen->selectRow(256 * (p->re - xymin) / (xymax - xymin));
-                    m_objDATVScreen->setDataColor(256 - 256 * ((p->im - xymin) / (xymax - xymin)), 255, 0, 255);
+                    m_objDATVScreen->setDataColor(
+                        256 - 256 * ((p->im - xymin) / (xymax - xymin)),
+                        255, 0, 255);
                 }
 
                 if (cstln && (*cstln))
                 {
                     // Plot constellation points
-
                     std::vector<int>::const_iterator row_it = cstln_rows.begin();
                     std::vector<int>::const_iterator col_it = cstln_cols.begin();
 
-                    for (; (row_it != cstln_rows.end()) && (col_it != cstln_cols.end()); ++row_it, ++col_it)
+                    for (;(row_it != cstln_rows.end()) && (col_it != cstln_cols.end()); ++row_it, ++col_it)
                     {
                         m_objDATVScreen->selectRow(*row_it);
                         m_objDATVScreen->setDataColor(*col_it, 250, 250, 5);
@@ -91,8 +176,7 @@ template<typename T> struct datvconstellation: runnable
 
             in.read(pixels_per_frame);
 
-            if (++phase >= decimation)
-            {
+            if (++phase >= decimation) {
                 phase = 0;
             }
         }
@@ -128,6 +212,6 @@ template<typename T> struct datvconstellation: runnable
     }
 };
 
-}
+} // leansdr
 
 #endif // DATVCONSTELLATION_H

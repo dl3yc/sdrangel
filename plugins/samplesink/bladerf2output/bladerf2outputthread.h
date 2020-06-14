@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -25,7 +26,7 @@
 #include "bladerf2/devicebladerf2shared.h"
 #include "dsp/interpolators.h"
 
-class SampleSinkFifo;
+class SampleSourceFifo;
 
 class BladeRF2OutputThread : public QThread {
     Q_OBJECT
@@ -72,6 +73,7 @@ private:
     unsigned int getNbFifos();
     void callbackSO(qint16* buf, qint32 len, unsigned int channel = 0);
     void callbackMO(qint16* buf, qint32 samplesPerChannel);
+    void callbackPart(qint16* buf, SampleVector& data, unsigned int iBegin, unsigned int iEnd, unsigned int channel);
 };
 
 

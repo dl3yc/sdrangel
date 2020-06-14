@@ -1,6 +1,6 @@
 ## Examples of client scripts ##
 
-These are all Python scripts using python-requests so you have to install this package as a prerequisite either with your package manager or pip. They are designed for Python 2.7 but may work with Python 3 possibly with minimal changes.
+These are all Python scripts using python-requests so you have to install this package as a prerequisite either with your package manager or pip. Some scripts work with Python 3 while others are still with Python 2.7.
 
 <h2>add_channel.py</h2>
 
@@ -10,9 +10,9 @@ Adds a channel to a device set specifying device set index and channel type.
   - URI: `/sdrangel/deviceset/{deviceSetIndex}/channel`
   - HTTP method: `POST`
 
-<h2>devicesets_config.py</h2>
+<h2>config.py</h2>
 
-Example of building an entire configuration with 3 device sets using presets to configure each one of the device sets then start streaming on all of them.
+Configure a SDRangel instance with a sequence of API calls defined as a list in a JSON file. See `test.json` for an example.
 
 It uses the following APIs:
 
@@ -82,6 +82,18 @@ It uses the following APIs:
     - OperationID: `devicesetChannelSettingsPatch`
     - URI: `/sdrangel/deviceset/{deviceSetIndex}/channel/{channelIndex}/settings`
     - HTTP method: `PATCH`
+
+<h2>ptt_active.py</h2>
+
+Handles the switchover between two arbitrary device sets
+  - Both device sets should have the reverse API feature set with the address and port of this server
+  - Once in place and you have started one of the devices you should only stop one or the other never start. There are two reasons for this:
+    - This module reacts on an action already taken so if you start Tx then the Rx is not stopped immediately and damage to the Rx could occur. If you start with a stop action you cannot get in this situation.
+    - For half duplex devices (only the HackRF) it will lock Tx or Rx. You can always recover the situation by stopping the running side.
+  - There is no assumption on the Rx or Tx nature you may as well switchover 2 Rx or 2 Tx
+  - Both devices have not to belong to the same physical device necessarily. You could mix a RTL-SDR Rx and a HackRF Tx for example
+
+Depends on `flask` and `requests`: to install do `pip install flask requests` in your virtual environment.
 
 <h2>ptt.py</h2>
 

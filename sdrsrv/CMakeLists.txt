@@ -1,8 +1,8 @@
 project (sdrsrv)
 
 set(sdrsrv_SOURCES
-    maincore.cpp   
-    device/deviceset.cpp 
+    maincore.cpp
+    device/deviceset.cpp
     webapi/webapiadaptersrv.cpp
 )
 
@@ -12,39 +12,30 @@ set(sdrsrv_HEADERS
     webapi/webapiadaptersrv.h
 )
 
-set(sdrsrv_SOURCES
-    ${sdrsrv_SOURCES}
-    ${sdrsrv_HEADERS}
-)
-
-add_definitions(${QT_DEFINITIONS})
-add_definitions(-DQT_SHARED)
-
-add_library(sdrsrv SHARED
-    ${sdrsrv_SOURCES}
-    ${sdrsrv_HEADERS_MOC}
-)
+if (LIMESUITE_FOUND)
+  include_directories(${LIMESUITE_INCLUDE_DIR})
+  set(sdrgui_LIMERFE_LIB ${LIMESUITE_LIBRARY})
+endif (LIMESUITE_FOUND)
 
 include_directories(
-    .
     ${CMAKE_SOURCE_DIR}/exports
     ${CMAKE_SOURCE_DIR}/sdrbase
     ${CMAKE_SOURCE_DIR}/logging
     ${CMAKE_SOURCE_DIR}/httpserver
-    ${CMAKE_SOURCE_DIR}/swagger/sdrangel/code/qt5/client    
-    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/swagger/sdrangel/code/qt5/client
     ${OPENGL_INCLUDE_DIR}
 )
 
+add_library(sdrsrv SHARED
+    ${sdrsrv_SOURCES}
+)
+
 target_link_libraries(sdrsrv
-    ${QT_LIBRARIES}
+    Qt5::Core
+    Qt5::Multimedia
     sdrbase
     logging
 )
 
-target_compile_features(sdrsrv PRIVATE cxx_generalized_initializers) # cmake >= 3.1.0
-
-target_link_libraries(sdrsrv Qt5::Core Qt5::Multimedia)
-
-install(TARGETS sdrsrv DESTINATION lib)
+install(TARGETS sdrsrv DESTINATION ${INSTALL_LIB_DIR})
 

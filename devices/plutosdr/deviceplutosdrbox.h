@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -132,7 +133,6 @@ private:
     void formatFIRHeader(std::ostringstream& str, uint32_t intdec);
     void formatFIRCoefficients(std::ostringstream& str, uint32_t nbTaps, double normalizedBW);
     void getXO();
-    void setTracking();
 };
 
 #endif /* DEVICES_PLUTOSDR_DEVICEPLUTOSDRBOX_H_ */

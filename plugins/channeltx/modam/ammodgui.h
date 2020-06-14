@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -82,6 +83,7 @@ private:
     void blockApplySettings(bool block);
     void applySettings(bool force = false);
     void displaySettings();
+    void displayStreamIndex();
     void updateWithStreamData();
     void updateWithStreamTime();
 
@@ -106,11 +108,15 @@ private slots:
     void on_navTimeSlider_valueChanged(int value);
     void on_showFileDialog_clicked(bool checked);
 
+    void on_feedbackEnable_toggled(bool checked);
+    void on_feedbackVolume_valueChanged(int value);
+
     void onWidgetRolled(QWidget* widget, bool rollDown);
     void onMenuDialogCalled(const QPoint& p);
 
     void configureFileName();
     void audioSelect();
+    void audioFeedbackSelect();
     void tick();
 };
 

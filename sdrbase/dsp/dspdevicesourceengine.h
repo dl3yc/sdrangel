@@ -5,6 +5,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,7 +32,6 @@
 
 class DeviceSampleSource;
 class BasebandSampleSink;
-class ThreadedBasebandSampleSink;
 
 class SDRBASE_API DSPDeviceSourceEngine : public QThread {
 	Q_OBJECT
@@ -66,9 +66,6 @@ public:
 	void addSink(BasebandSampleSink* sink); //!< Add a sample sink
 	void removeSink(BasebandSampleSink* sink); //!< Remove a sample sink
 
-	void addThreadedSink(ThreadedBasebandSampleSink* sink); //!< Add a sample sink that will run on its own thread
-	void removeThreadedSink(ThreadedBasebandSampleSink* sink); //!< Remove a sample sink that runs on its own thread
-
 	void configureCorrections(bool dcOffsetCorrection, bool iqImbalanceCorrection); //!< Configure DSP corrections
 
 	State state() const { return m_state; } //!< Return DSP engine current state
@@ -92,9 +89,6 @@ private:
 
 	typedef std::list<BasebandSampleSink*> BasebandSampleSinks;
 	BasebandSampleSinks m_basebandSampleSinks; //!< sample sinks within main thread (usually spectrum, file output)
-
-	typedef std::list<ThreadedBasebandSampleSink*> ThreadedBasebandSampleSinks;
-	ThreadedBasebandSampleSinks m_threadedBasebandSampleSinks; //!< sample sinks on their own threads (usually channels)
 
 	uint m_sampleRate;
 	quint64 m_centerFrequency;

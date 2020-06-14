@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -16,7 +17,6 @@
 
 #include "devicehackrfshared.h"
 
-MESSAGE_CLASS_DEFINITION(DeviceHackRFShared::MsgConfigureFrequencyDelta, Message)
+MESSAGE_CLASS_DEFINITION(DeviceHackRFShared::MsgSynchronizeFrequency, Message)
 
-const float  DeviceHackRFShared::m_sampleFifoLengthInSeconds = 0.25;
-const int    DeviceHackRFShared::m_sampleFifoMinSize = 150000; // 600kS/s knee
+const unsigned int DeviceHackRFShared::m_sampleFifoMinRate = 48000; // 48kS/s knee

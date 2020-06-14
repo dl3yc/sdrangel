@@ -4,6 +4,7 @@
 // This program is free software; you can redistribute it and/or modify          //
 // it under the terms of the GNU General Public License as published by          //
 // the Free Software Foundation as version 3 of the License, or                  //
+// (at your option) any later version.                                           //
 //                                                                               //
 // This program is distributed in the hope that it will be useful,               //
 // but WITHOUT ANY WARRANTY; without even the implied warranty of                //
@@ -31,7 +32,7 @@
 
 #include "mainwindow.h"
 
-#include "device/devicesinkapi.h"
+#include "device/deviceapi.h"
 #include "device/deviceuiset.h"
 #include "filesinkgui.h"
 
@@ -49,7 +50,7 @@ FileSinkGui::FileSinkGui(DeviceUISet *deviceUISet, QWidget* parent) :
 	m_startingTimeStamp(0),
 	m_samplesCount(0),
 	m_tickCount(0),
-	m_lastEngineState(DSPDeviceSinkEngine::StNotStarted)
+	m_lastEngineState(DeviceAPI::StNotStarted)
 {
 	ui->setupUi(this);
 
@@ -61,14 +62,14 @@ FileSinkGui::FileSinkGui(DeviceUISet *deviceUISet, QWidget* parent) :
 
 	ui->fileNameText->setText(m_fileName);
 
-	connect(&(m_deviceUISet->m_deviceSinkAPI->getMasterTimer()), SIGNAL(timeout()), this, SLOT(tick()));
+	connect(&(m_deviceUISet->m_deviceAPI->getMasterTimer()), SIGNAL(timeout()), this, SLOT(tick()));
 	connect(&m_updateTimer, SIGNAL(timeout()), this, SLOT(updateHardware()));
 	connect(&m_statusTimer, SIGNAL(timeout()), this, SLOT(updateStatus()));
 	m_statusTimer.start(500);
 
 	displaySettings();
 
-    m_deviceSampleSink = (FileSinkOutput*) m_deviceUISet->m_deviceSinkAPI->getSampleSink();
+    m_deviceSampleSink = (FileSinkOutput*) m_deviceUISet->m_deviceAPI->getSampleSink();
     connect(&m_inputMessageQueue, SIGNAL(messageEnqueued()), this, SLOT(handleInputMessages()), Qt::QueuedConnection);
 }
 
@@ -133,6 +134,7 @@ bool FileSinkGui::handleMessage(const Message& message)
 {
     if (FileSinkOutput::MsgConfigureFileSink::match(message))
     {
+        qDebug("FileSinkGui::handleMessage: message: MsgConfigureFileSink");
         const FileSinkOutput::MsgConfigureFileSink& cfg = (FileSinkOutput::MsgConfigureFileSink&) message;
         m_settings = cfg.getSettings();
         blockApplySettings(true);
@@ -143,6 +145,7 @@ bool FileSinkGui::handleMessage(const Message& message)
     else if (FileSinkOutput::MsgReportFileSinkGeneration::match(message))
 	{
 		m_generation = ((FileSinkOutput::MsgReportFileSinkGeneration&)message).getAcquisition();
+        qDebug("FileSinkGui::handleMessage: message: MsgReportFileSinkGeneration: %s", m_generation ? "start" : "stop");
 		updateWithGeneration();
 		return true;
 	}
@@ -155,6 +158,7 @@ bool FileSinkGui::handleMessage(const Message& message)
 	else if (FileSinkOutput::MsgStartStop::match(message))
 	{
 	    FileSinkOutput::MsgStartStop& notif = (FileSinkOutput::MsgStartStop&) message;
+        qDebug("FileSinkGui::handleMessage: message: MsgStartStop: %s", notif.getStartStop() ? "start" : "stop");
 	    blockApplySettings(true);
 	    ui->startStop->setChecked(notif.getStartStop());
 	    blockApplySettings(false);
@@ -172,7 +176,6 @@ void FileSinkGui::handleInputMessages()
 
     while ((message = m_inputMessageQueue.pop()) != 0)
     {
-        qDebug("FileSinkGui::handleInputMessages: message: %s", message->getIdentifier());
 
         if (DSPSignalNotification::match(*message))
         {
@@ -225,24 +228,24 @@ void FileSinkGui::updateHardware()
 
 void FileSinkGui::updateStatus()
 {
-    int state = m_deviceUISet->m_deviceSinkAPI->state();
+    int state = m_deviceUISet->m_deviceAPI->state();
 
     if(m_lastEngineState != state)
     {
         switch(state)
         {
-            case DSPDeviceSinkEngine::StNotStarted:
+            case DeviceAPI::StNotStarted:
                 ui->startStop->setStyleSheet("QToolButton { background:rgb(79,79,79); }");
                 break;
-            case DSPDeviceSinkEngine::StIdle:
+            case DeviceAPI::StIdle:
                 ui->startStop->setStyleSheet("QToolButton { background-color : blue; }");
                 break;
-            case DSPDeviceSinkEngine::StRunning:
+            case DeviceAPI::StRunning:
                 ui->startStop->setStyleSheet("QToolButton { background-color : green; }");
                 break;
-            case DSPDeviceSinkEngine::StError:
+            case DeviceAPI::StError:
                 ui->startStop->setStyleSheet("QToolButton { background-color : red; }");
-                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceSinkAPI->errorMessage());
+                QMessageBox::information(this, tr("Message"), m_deviceUISet->m_deviceAPI->errorMessage());
                 break;
             default:
                 break;
